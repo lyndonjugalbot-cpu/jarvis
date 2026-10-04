@@ -55,4 +55,4 @@ else
   echo "Codex CLI not found (needed from Phase 5): brew install codex"
 fi
 
-echo "Done. Next: scripts/start.sh core and scripts/start.sh hud"
+echo "Done. Next: scripts/start.sh chat"

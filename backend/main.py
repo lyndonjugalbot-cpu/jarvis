@@ -1,9 +1,11 @@
 """JARVIS core entry point.
 
 python main.py serve   # HUD backend on 127.0.0.1 (WebSocket arrives in Phase 3)
+python main.py chat    # Phase 1 terminal chat
 """
 
 import argparse
+import asyncio
 import logging
 from logging.handlers import RotatingFileHandler
 
@@ -41,9 +43,19 @@ def create_app(settings: Settings) -> FastAPI:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="jarvis", description="JARVIS core")
-    parser.add_argument("command", nargs="?", default="serve", choices=["serve"])
+    parser.add_argument("command", nargs="?", default="serve", choices=["serve", "chat"])
     args = parser.parse_args(argv)
     settings = load_settings()
+
+    if args.command == "chat":
+        setup_logging(settings, console=False)  # details go to ~/.jarvis/logs, the chat stays clean
+        from terminal import run_chat
+
+        try:
+            asyncio.run(run_chat(settings))
+        except KeyboardInterrupt:
+            print()
+        return
 
     setup_logging(settings, console=True)
     uvicorn.run(create_app(settings), host=settings.host, port=settings.port, log_config=None)
