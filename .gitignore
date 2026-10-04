@@ -1,0 +1,18 @@
+# Secrets
+.env
+.env.local
+*token*.json
+
+# Dependencies and build output (the Python env lives in ~/.jarvis)
+node_modules/
+.venv/
+frontend/dist/
+frontend/public/models/*.task
+
+# Caches
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+.DS_Store
