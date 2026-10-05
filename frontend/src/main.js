@@ -117,6 +117,25 @@ socket.on("confirm_request", (request) => {
 });
 socket.on("confirm_done", ({ actionId }) => confirmPrompt.done(actionId));
 
+// Google access was lost (or never set up): offer the browser sign-in on this computer.
+const notice = $("notice");
+const connectButton = notice.querySelector("button");
+socket.on("auth_needed", ({ service, message }) => {
+  if (service !== "google") return;
+  notice.querySelector(".notice-text").textContent = message;
+  notice.hidden = false;
+});
+connectButton.addEventListener("click", () => {
+  if (!socket.send("connect_google")) return;
+  connectButton.disabled = true;
+  say("Opening Google's sign-in page in your browser...");
+});
+socket.on("auth_done", ({ ok, message }) => {
+  connectButton.disabled = false;
+  if (ok) notice.hidden = true;
+  say(message);
+});
+
 // ---------------------------------------------------------------- gestures
 const cursor = createCursor($("cursor"));
 const engine = createGestureEngine(settings);

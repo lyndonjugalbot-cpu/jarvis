@@ -33,7 +33,7 @@ def client(url: str, token: str = TOKEN) -> Client:
 async def test_lists_and_calls_registry_tools(server):
     async with client(server.url) as c:
         tools = {t.name: t for t in (await c.list_tools()).tools}
-        assert set(tools) == {"get_time", "write_note", "list_notes", "read_note"}
+        assert {"get_time", "system_stats", "write_note", "list_notes", "read_note"} <= set(tools)
         assert tools["write_note"].input_schema["required"] == ["title", "text"]
 
         result = await c.call_tool("get_time", {})

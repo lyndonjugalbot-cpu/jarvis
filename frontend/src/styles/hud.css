@@ -383,6 +383,36 @@ body {
   box-shadow: 0 0 10px rgba(34, 211, 238, 0.35);
 }
 
+/* Notices that need an action, e.g. reconnecting Google */
+.notice {
+  z-index: 24;
+  position: fixed;
+  top: 84px;
+  left: 24px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: min(460px, calc(100vw - 48px));
+  padding: 12px 14px;
+  border: 1px solid var(--warning);
+  background: rgba(5, 8, 15, 0.92);
+}
+
+.notice-text {
+  margin: 0;
+  font-size: 13px;
+}
+
+.notice .hud-button {
+  flex: none;
+  margin-left: 0;
+}
+
+.notice .hud-button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
 /* Confirmation prompt for risky actions */
 .confirm {
   z-index: 25;

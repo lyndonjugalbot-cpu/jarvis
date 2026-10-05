@@ -14,8 +14,9 @@ come next, and a pay-per-use API is only the last resort, with a monthly cap.
 | 1. Brain | Done: terminal chat on the Claude plan, tool registry, MCP tool server, time, web search, notes |
 | 2. HUD + gestures | Done: Three.js panels with bloom, webcam hand tracking, gestures with the 7.1 rules, demo, recorder |
 | 3. Connect | Done: WebSocket link (Origin check, first-message token), typing in the HUD, panels from the core, approve/cancel prompt, orb states, provider badge |
-| 4. Real tools | Next |
-| 5-8 | Not started |
+| 4. Real tools | Done: weather, files, system, Calendar and Gmail (after the one-time [Google setup](docs/google-setup.md)), reconnect flow |
+| 5. Fallback chain | Next |
+| 6-8 | Not started |
 
 ## Requirements
 
@@ -40,6 +41,7 @@ This installs the Python packages into `~/.jarvis/venv` and the HUD packages int
 scripts/start.sh chat   # talk to JARVIS in the terminal
 scripts/start.sh core   # core server for the HUD (http://127.0.0.1:8765/api/health)
 scripts/start.sh hud    # HUD on http://127.0.0.1:5173
+scripts/start.sh google # connect Calendar and Gmail (after docs/google-setup.md)
 scripts/start.sh test   # backend and gesture tests
 ```
 
@@ -58,6 +60,22 @@ are used. Saving a note asks for a typed `y` first, standing in for the HUD's th
   paid API.
 
 Settings are in `backend/config.toml`. Logs and notes are in `~/.jarvis/`.
+
+## What JARVIS can do
+
+| Area | Tools | Asks first |
+| --- | --- | --- |
+| Time and weather | `get_time`, `get_weather` (Open-Meteo; home is your time zone's city unless `[user] location` is set) | No |
+| Calendar | `get_events`, `create_event` | Creating |
+| Email | `search_email`, `read_email`, `draft_email`, `send_email` | Sending |
+| Notes | `write_note`, `list_notes`, `read_note` | Writing |
+| Files | `search_files` (Spotlight), `read_file` (text only), limited to `[tools] file_roots` | No |
+| This computer | `system_stats`, `open_app`, `open_url` (http/https only) | No |
+| Screen | `show_panel`, `close_panel` | No |
+| Google account | `connect_google` | No |
+
+Calendar and Gmail need a one-time setup of your own Google Cloud project:
+[docs/google-setup.md](docs/google-setup.md), then `scripts/start.sh google`.
 
 ## The HUD
 
@@ -85,8 +103,8 @@ and [docs/protocol.md](docs/protocol.md) for the WebSocket messages.
 ## Layout
 
 ```
-backend/   main.py (server, /ws), core.py, hud_bridge.py, terminal.py, brain/ (router, providers), tools/ (registry, MCP server, tools), tests/
+backend/   main.py (server, /ws), core.py, hud_bridge.py, terminal.py, brain/ (router, providers), tools/ (registry, MCP server, tools), auth/google.py, tests/
 frontend/  Vite app: src/hud/ (scene, panels, cursor, transcript, confirm, debug, settings), src/gestures/ (tracker, pose, recognizer, arbiter, controller), src/net/socket.js, tests/
 scripts/   setup.sh, start.sh
-docs/      gestures.md, protocol.md
+docs/      gestures.md, protocol.md, google-setup.md
 ```

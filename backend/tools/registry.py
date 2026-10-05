@@ -42,7 +42,10 @@ class ToolSpec:
 
     def describe_action(self, args: dict[str, Any]) -> str:
         if self.summary:
-            return self.summary(args)
+            try:
+                return self.summary(args)
+            except Exception:
+                log.exception("summary for %s failed", self.name)
         shown = ", ".join(f"{k}={v!r}" for k, v in args.items())
         return f"Run {self.name}({shown})?"
 

@@ -1,7 +1,8 @@
 """JARVIS core entry point.
 
-python main.py serve   # core for the HUD: WebSocket /ws on 127.0.0.1
-python main.py chat    # terminal chat
+python main.py serve          # core for the HUD: WebSocket /ws on 127.0.0.1
+python main.py chat           # terminal chat
+python main.py google-login   # connect Calendar and Gmail (docs/google-setup.md)
 """
 
 import argparse
@@ -64,9 +65,20 @@ def create_app(
         async def provider_changed(**_):
             await bridge.broadcast("provider", assistant.provider_status())
 
+        async def google_lost(reason: str = "", **_):
+            await bridge.broadcast(
+                "auth_needed",
+                {
+                    "service": "google",
+                    "message": "JARVIS lost access to Google. Reconnect to use Calendar and Gmail.",
+                },
+            )
+
         events.subscribe("provider.active", provider_changed)
         events.subscribe("provider.limit", provider_changed)
+        events.subscribe("google.lost", google_lost)
         app.state.assistant = assistant
+        app.state.core = core
         try:
             yield
         finally:
@@ -135,8 +147,25 @@ def create_app(
             bridge.resolve(str(payload.get("actionId", "")), payload.get("approved") is True)
         elif kind == "gesture_event":
             log.info("gesture %s on panel %s", payload.get("gesture"), payload.get("panelId"))
+        elif kind == "connect_google":
+            bridge.spawn(connect_google(app.state.core.google))
         else:
             await bridge.send(ws, "error", {"message": f"Unknown message type: {kind!r}"})
+
+    async def connect_google(google) -> None:
+        """Run Google's browser sign-in on this computer and tell the HUDs how it went."""
+        try:
+            await asyncio.to_thread(google.login)
+        except Exception as e:  # not set up, cancelled, or timed out
+            log.warning("Google sign-in failed: %s", e)
+            await bridge.broadcast(
+                "auth_done",
+                {"service": "google", "ok": False, "message": str(e) or "Sign-in didn't finish."},
+            )
+            return
+        await bridge.broadcast(
+            "auth_done", {"service": "google", "ok": True, "message": "Connected to Google."}
+        )
 
     if HUD_DIST.is_dir():  # a built HUD (npm run build) is served by the core itself
         app.mount("/", StaticFiles(directory=HUD_DIST, html=True), name="hud")
@@ -146,9 +175,23 @@ def create_app(
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="jarvis", description="JARVIS core")
-    parser.add_argument("command", nargs="?", default="serve", choices=["serve", "chat"])
+    parser.add_argument(
+        "command", nargs="?", default="serve", choices=["serve", "chat", "google-login"]
+    )
     args = parser.parse_args(argv)
     settings = load_settings()
+
+    if args.command == "google-login":
+        from auth.google import GoogleAuth, GoogleNotConnected
+
+        google = GoogleAuth(settings.google_client_file, settings.google_token_file)
+        try:
+            print("Opening Google's sign-in page in your browser...")
+            google.login()
+        except GoogleNotConnected as e:
+            raise SystemExit(str(e)) from None
+        print(f"Connected. The sign-in is saved in {google.token_file}.")
+        return
 
     if args.command == "chat":
         setup_logging(settings, console=False)  # details go to ~/.jarvis/logs, the chat stays clean

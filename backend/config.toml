@@ -9,6 +9,7 @@ data_dir = "~/.jarvis"   # venv, logs, notes, tokens; kept out of iCloud-synced 
 
 [user]
 name = "Lyndon"
+location = ""   # home for the weather; empty = the city in this computer's time zone
 
 [brain]
 history_turns = 20   # recent turns JARVIS keeps so it can switch providers without losing context
@@ -29,4 +30,10 @@ stall_timeout_s = 45          # no output for this long (outside JARVIS tool cal
 
 [tools]
 confirm_timeout_s = 30        # no answer to a confirmation counts as "no"
+file_roots = ["~/Documents", "~/Desktop", "~/Downloads"]   # the only folders JARVIS may search and read
 # notes_dir = "~/Documents/Notes"   # default: <data_dir>/notes
+
+[google]
+# Your own OAuth client (docs/google-setup.md) and the saved sign-in. Both stay out of the repo.
+# client_file = "~/.jarvis/google_client.json"
+# token_file = "~/.jarvis/google_token.json"

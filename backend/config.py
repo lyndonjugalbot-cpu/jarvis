@@ -35,6 +35,10 @@ class Settings:
     notes_dir: Path
     history_turns: int
     token: str
+    location: str = ""
+    file_roots: tuple[Path, ...] = ()
+    google_client_file: Path = Path("~/.jarvis/google_client.json").expanduser()
+    google_token_file: Path = Path("~/.jarvis/google_token.json").expanduser()
     hud_origins: tuple[str, ...] = ("http://127.0.0.1:5173", "http://localhost:5173")
 
     @property
@@ -61,6 +65,7 @@ def load_settings(config_path: Path | None = None, env_path: Path | None = None)
     claude = providers.get("claude_plan", {})
     tools = raw.get("tools", {})
     brain = raw.get("brain", {})
+    google = raw.get("google", {})
 
     data_dir = _path(os.environ.get("JARVIS_HOME") or core.get("data_dir", "~/.jarvis"))
     defaults = ClaudePlanSettings()
@@ -84,4 +89,10 @@ def load_settings(config_path: Path | None = None, env_path: Path | None = None)
         history_turns=int(brain.get("history_turns", 20)),
         token=os.environ.get("JARVIS_TOKEN", ""),
         hud_origins=tuple(core.get("hud_origins", Settings.hud_origins)),
+        location=user.get("location", ""),
+        file_roots=tuple(
+            _path(p) for p in tools.get("file_roots", ["~/Documents", "~/Desktop", "~/Downloads"])
+        ),
+        google_client_file=_path(google.get("client_file", str(data_dir / "google_client.json"))),
+        google_token_file=_path(google.get("token_file", str(data_dir / "google_token.json"))),
     )
