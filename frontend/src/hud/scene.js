@@ -9,7 +9,7 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { CSS3DRenderer } from "three/addons/renderers/CSS3DRenderer.js";
 
-const BACKGROUND = 0x05080f;
+const BACKGROUND = 0x03070f;
 
 export function createScene(canvas, cssHost) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });

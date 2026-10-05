@@ -41,7 +41,7 @@ If the connection drops, the HUD reconnects with backoff (0.5 s, doubling up to 
 | type | payload | meaning |
 | --- | --- | --- |
 | `auth_ok` | `{ "session": "3fa1c2d0" }` | Connected |
-| `state` | `{ "state": "idle" \| "thinking" \| "listening" \| "speaking" }` | Drives the orb |
+| `state` | `{ "state": "idle" \| "thinking" \| "listening" \| "speaking" }` | Drives the hologram, the stage words and the turn status |
 | `transcript` | `{ "role": "user" \| "jarvis", "text": "...", "provider", "tools", "seconds" }` | Conversation lines; `provider`, `tools` and `seconds` come with JARVIS's replies |
 | `show_panel` | `{ "panel": { "id", "type", "title", "data" } }` | Open a panel, or update the one with that id |
 | `update_panel` | `{ "panelId": "p12", "data": ... }` | Replace a panel's content |
@@ -53,9 +53,16 @@ If the connection drops, the HUD reconnects with backoff (0.5 s, doubling up to 
 | `auth_needed` | `{ "service": "google", "message": "..." }` | Access was lost; the HUD shows a Connect button |
 | `auth_done` | `{ "service": "google", "ok": true, "message": "..." }` | How the sign-in went |
 | `error` | `{ "message": "..." }` | A friendly error to show |
+| `telemetry` | `{ "cpu", "memory", "disk", "battery", "charging", "network", "uptime_h" }` | This computer's load (percentages; `battery` is null without one), every 3 s and on connect |
+| `modules` | `{ "rows": [{ "name", "state" }], "home": { "name", "lat", "lon" } \| null }` | Each provider (online, off, cooling down, standby), memory, Google and voice; and home for the globe. Every 30 s and on connect |
+| `audio` | `{ "levels": [0..1, ...] }` | Microphone levels while the mic is on, a few at a time, for the waveform |
 
 `confirm_done` isn't in the spec's message table. It was added so every open HUD closes its
-prompt when the request is settled.
+prompt when the request is settled. `telemetry`, `modules` and `audio` feed the dashboard's
+instruments.
+
+`GET /api/avatar` serves `~/.jarvis/avatar.png`, the figure on the hologram stage (404 when there
+isn't one; the HUD then shows an orb).
 
 ## Panel types
 
@@ -68,7 +75,8 @@ prompt when the request is settled.
 | `calendar` | `[{ "title", "start", "end", "location" }]`, shown as an agenda |
 | `chart` | `{ "labels": [...], "values": [numbers], "kind": "bar" \| "line", "unit": "" }`, drawn as SVG |
 | `image` | `{ "url": "https://...", "caption": "" }`; only http(s) URLs, loaded without a referrer |
+| `files` | `search_files` results as they are, or `{ "folder", "files": [{ "name", "path", "modified", "size_kb", "folder" }] }` |
 
 Panel content is built with DOM text nodes, never `innerHTML`, because data can come from web
-pages and emails. When all five places on the HUD are full, the least recently viewed panel
-moves to the dock.
+pages and emails. Panels open in the dashboard's panel slot, two at a time; when a third opens,
+the least recently viewed one moves to the dock.

@@ -46,6 +46,10 @@ export function createSocket({ url, token, onStatus = () => {} }) {
       if (!handlers.has(type)) handlers.set(type, []);
       handlers.get(type).push(handler);
     },
+    // Handle a message as if the core had sent it (dev hooks and demos).
+    emit(type, payload = {}) {
+      for (const handler of handlers.get(type) ?? []) handler(payload, { type, payload });
+    },
     send(type, payload = {}) {
       if (!authed || ws?.readyState !== WebSocket.OPEN) return false;
       ws.send(JSON.stringify({ type, payload, id: `h${++nextId}` }));

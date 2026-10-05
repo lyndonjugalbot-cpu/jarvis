@@ -9,12 +9,14 @@ import numpy as np
 
 from config import VoiceSettings
 from voice.audio import Microphone, Speaker
+from voice.endpoint import level_db
 from voice.engines import PiperVoiceOut, SayVoiceOut, Transcriber, WakeWord
 from voice.loop import VoiceLoop
 
 log = logging.getLogger(__name__)
 
 SILENCE_CHECK_CHUNKS = 40  # ~3 s
+AUDIO_BATCH = 3  # mic levels per HUD message (240 ms)
 
 
 class VoiceService:
@@ -85,11 +87,18 @@ class VoiceService:
             await self._mic_state("unavailable", f"Voice stopped: {e}")
 
     async def _checked(self, chunks):
-        """Pass chunks through, warning once if the microphone only gives digital silence:
-        that's what macOS does when the app hasn't been allowed to use the microphone."""
+        """Pass chunks through, warning once if the microphone only gives digital silence
+        (what macOS does when the app hasn't been allowed to use the microphone), and send the
+        HUD a few loudness levels at a time for its audio waveform."""
         seen = 0
         silent = True
+        levels: list[float] = []
         async for chunk in chunks:
+            levels.append(round(max(0.0, min(1.0, (level_db(chunk) + 60) / 50)), 3))
+            if len(levels) >= AUDIO_BATCH:
+                if self._bridge.connected:
+                    await self._bridge.broadcast("audio", {"levels": levels})
+                levels = []
             if seen < SILENCE_CHECK_CHUNKS:
                 seen += 1
                 silent = silent and not np.any(chunk)

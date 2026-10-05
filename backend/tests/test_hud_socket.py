@@ -69,7 +69,13 @@ def client(tmp_path, monkeypatch):
         notes_dir=tmp_path / "notes",
         confirm_timeout_s=2,
     )
-    app = create_app(settings, core_factory=fake_core, auth_timeout_s=0.3, voice_enabled=False)
+    app = create_app(
+        settings,
+        core_factory=fake_core,
+        auth_timeout_s=0.3,
+        voice_enabled=False,
+        live_dashboard=False,
+    )
     with TestClient(app) as c:
         yield c
 
@@ -84,6 +90,11 @@ def connect(client):
     assert provider["payload"]["order"] == ["Fake plan"]
     assert session.receive_json()["payload"] == {"state": "idle"}
     assert session.receive_json()["type"] == "mic"
+    telemetry = session.receive_json()
+    assert telemetry["type"] == "telemetry" and 0 <= telemetry["payload"]["cpu"] <= 100
+    modules = session.receive_json()
+    assert modules["type"] == "modules"
+    assert {"name": "Fake plan", "state": "online"} in modules["payload"]["rows"]
     return ws, session
 
 
@@ -261,3 +272,31 @@ async def test_panel_types_are_checked():
     ):
         result = await reg.run("show_panel", {"title": "x", **bad})
         assert result.is_error, bad
+
+
+def test_avatar_is_served_when_present(client, tmp_path):
+    assert client.get("/api/avatar").status_code == 404
+    (tmp_path / "avatar.png").write_bytes(b"\x89PNG fake")
+    response = client.get("/api/avatar")
+    assert response.status_code == 200 and response.headers["content-type"] == "image/png"
+
+
+async def test_files_panels_are_checked():
+    from tools.hud import make_hud_tools
+    from tools.registry import ToolRegistry
+
+    class Bridge:
+        connected = True
+        sent = []
+
+        async def broadcast(self, kind, payload):
+            self.sent.append(payload["panel"])
+
+    reg = ToolRegistry(make_hud_tools(Bridge()))
+    rows = [
+        {"name": "MSE800 - Assessment2", "path": "~/Documents/MSE800 - Assessment2", "folder": True}
+    ]
+    result = await reg.run("show_panel", {"title": "Files", "type": "files", "data": rows})
+    assert not result.is_error
+    assert Bridge.sent[-1]["data"] == {"folder": "", "files": rows}
+    assert (await reg.run("show_panel", {"title": "x", "type": "files", "data": ["no"]})).is_error

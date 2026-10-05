@@ -15,48 +15,103 @@
     <div class="grid" aria-hidden="true"></div>
     <div class="scanlines" aria-hidden="true"></div>
 
-    <header class="status-bar">
-      <div class="wordmark">J.A.R.V.I.S.</div>
+    <header class="status-bar frame" data-cut="16">
+      <div class="brand">
+        <svg class="logo" viewBox="0 0 48 48" aria-hidden="true">
+          <circle cx="24" cy="24" r="21" class="logo-ring" />
+          <path d="M24 3a21 21 0 0 1 21 21" class="logo-arc" />
+          <circle cx="24" cy="24" r="13" class="logo-ring" />
+          <circle cx="24" cy="24" r="6" class="logo-core" />
+        </svg>
+        <span class="wordmark">J.A.R.V.I.S.</span>
+      </div>
       <ul class="indicators">
         <li data-indicator="gestures" data-state="off">
-          <span class="dot"></span><span class="label">Gestures</span><span class="value">camera off</span>
+          <span class="dot"></span>
+          <span class="text"><span class="label">Gestures</span><span class="value">camera off</span></span>
         </li>
-        <li data-indicator="mic" data-state="off">
-          <span class="dot"></span><span class="label">Mic</span><span class="value">off</span>
+        <li data-indicator="fps" data-state="online">
+          <span class="dot"></span>
+          <span class="text"><span class="label">-- fps</span><span class="value">stable</span></span>
+        </li>
+        <li data-indicator="mic" data-state="off" title="Click to switch the microphone on or off">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" /></svg>
+          <span class="text"><span class="label">Mic</span><span class="value">off</span><span class="sub"></span></span>
         </li>
         <li data-indicator="core" data-state="checking">
-          <span class="dot"></span><span class="label">Core</span><span class="value">checking</span>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" /><circle cx="12" cy="12" r="5.5" /><circle cx="12" cy="12" r="2" class="fill" /></svg>
+          <span class="text"><span class="label">Core</span><span class="value">checking</span></span>
         </li>
         <li data-indicator="brain" data-state="off">
-          <span class="dot"></span><span class="label">Brain</span><span class="value">not linked</span>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 20.5 7.3v9.4L12 21.5l-8.5-4.8V7.3Z" /><path d="M12 2.5v19M3.5 7.3l17 9.4M20.5 7.3l-17 9.4" /></svg>
+          <span class="text"><span class="label">Brain</span><span class="value">not linked</span></span>
         </li>
       </ul>
       <button id="camera-toggle" class="hud-button" type="button">Start camera</button>
-      <time id="clock" class="clock"></time>
+      <div class="clock"><time id="clock"></time><span id="date"></span></div>
     </header>
 
-    <main class="stage">
-      <div class="orb" data-state="idle" aria-label="JARVIS is idle">
-        <span class="ring r1"></span>
-        <span class="ring r2"></span>
-        <span class="ring r3"></span>
-        <span class="core"></span>
-      </div>
+    <main class="dashboard">
+      <section class="col left">
+        <div class="panel-slot frame empty" id="panel-slot" data-cut="16"><p class="slot-hint">Panels JARVIS opens appear here</p></div>
+        <nav id="dock" class="dock" aria-label="Minimized panels"></nav>
+        <section class="telemetry">
+          <canvas id="gauge" aria-label="CPU load"></canvas>
+          <div class="bars" id="bars"></div>
+        </section>
+      </section>
+
+      <section class="col center">
+        <section class="conversation frame" data-cut="18">
+          <header class="conversation-head">
+            <h2>JARVIS</h2>
+            <span class="subtitle">AI assistant interface</span>
+            <span class="tags" id="conv-tags"></span>
+            <button class="menu" id="conv-menu" type="button" title="Settings (S)" aria-label="Settings">&bull;&bull;&bull;</button>
+          </header>
+          <div class="messages" id="messages" aria-live="polite"></div>
+          <footer class="turn">
+            <span class="turn-status">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5h6l2 2.5h10v9.5H3Z" /></svg>
+              <span id="turn-status">Ready</span>
+            </span>
+            <span class="chips" id="turn-chips"></span>
+          </footer>
+        </section>
+
+        <section class="stage" id="stage" aria-label="JARVIS">
+          <div class="stage-label left">
+            <b>J.A.R.V.I.S.</b><span>Artificial</span><span>intelligence</span><span>interface</span>
+          </div>
+          <ul class="stage-label right" id="stage-modes">
+            <li data-mode="analyze">Analyze</li>
+            <li data-mode="process">Process</li>
+            <li data-mode="assist">Assist</li>
+            <li data-mode="monitor">Monitor</li>
+            <li data-mode="protect">Protect</li>
+          </ul>
+        </section>
+
+        <p class="toast" id="toast" role="status"></p>
+        <form class="ask-bar frame" id="ask" data-cut="14" autocomplete="off">
+          <span class="ask-wave" id="ask-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+          <input type="text" name="text" maxlength="4000" placeholder="Ask JARVIS... ( / to type )" aria-label="Ask JARVIS" />
+          <button type="button" class="mic-button" id="mic-button" aria-label="Microphone on or off">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" /></svg>
+          </button>
+        </form>
+      </section>
+
+      <section class="col right">
+        <div class="globe-slot frame" id="globe-slot"><span class="globe-label" id="globe-label"></span></div>
+        <section class="widget frame"><h3>System status</h3><dl class="rows" id="system-status"></dl></section>
+        <section class="widget frame"><h3>Audio input</h3><canvas id="audio-wave"></canvas></section>
+        <section class="widget frame"><h3 id="analysis-title">Visual analysis</h3><canvas id="analysis"></canvas></section>
+        <section class="widget frame"><h3>Active modules</h3><dl class="rows" id="modules"></dl></section>
+      </section>
     </main>
 
-    <nav id="dock" class="dock" aria-label="Minimized panels"></nav>
-
-    <footer class="transcript" id="transcript">
-      <div class="lines" aria-live="polite"></div>
-      <p class="status">
-        Press <kbd>C</kbd> to start the camera, or <kbd>P</kbd> for a gesture demo. <kbd>?</kbd> lists every key.
-      </p>
-      <form class="ask">
-        <input type="text" name="text" maxlength="4000" autocomplete="off" placeholder="Ask JARVIS... ( / to type )" aria-label="Ask JARVIS" />
-      </form>
-    </footer>
-
-    <section class="notice" id="notice" role="status" hidden>
+    <section class="notice frame" id="notice" role="status" hidden>
       <p class="notice-text"></p>
       <button class="hud-button" type="button">Connect Google</button>
     </section>
@@ -106,13 +161,12 @@
         <dt>C</dt><dd>Camera on/off</dd>
         <dt>P</dt><dd>Play the gesture demo</dd>
         <dt>D</dt><dd>Debug view: tracked hands, poses, events</dd>
-        <dt>S</dt><dd>Gesture settings</dd>
+        <dt>S</dt><dd>Settings</dd>
         <dt>R</dt><dd>Record a landmark session to JSON (camera on)</dd>
-        <dt>N</dt><dd>New panel</dd>
-        <dt>&larr; &rarr;</dt><dd>Change focus</dd>
-        <dt>F</dt><dd>Maximize / restore the focused panel</dd>
-        <dt>M</dt><dd>Minimize the focused panel</dd>
-        <dt>X</dt><dd>Close the focused panel</dd>
+        <dt>&larr; &rarr;</dt><dd>Next / previous panel</dd>
+        <dt>F</dt><dd>Maximize / restore the panel</dd>
+        <dt>M</dt><dd>Minimize the panel to the dock</dd>
+        <dt>X</dt><dd>Close the panel</dd>
         <dt>Mouse</dt><dd>Drag panels; double-click to maximize</dd>
       </dl>
     </aside>

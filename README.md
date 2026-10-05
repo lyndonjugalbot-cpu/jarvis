@@ -167,8 +167,18 @@ to answer). Requests that use tools take longer.
 `scripts/start.sh` opens it at http://127.0.0.1:8765. For HUD development, run `scripts/start.sh core` and
 `scripts/start.sh hud` and open http://127.0.0.1:5173 instead.
 
-- **Panels:** text, lists, calendar agendas, bar and line charts, and images. When the five
-  places are full, the panel you looked at least recently moves to the dock.
+The layout follows a dashboard concept: a status bar (gestures, frame rate, mic, core,
+brain, clock); the panel slot and this computer's telemetry on the left; the conversation, the
+hologram stage and the input bar in the middle; and on the right a globe marking home, system
+status, the microphone's waveform, a history chart (CPU, or hand tracking while the camera is on)
+and which modules are ready.
+
+- **Panels:** text, lists, calendar agendas, bar and line charts, images and file results. They
+  open in the slot on the left, two at a time; the one you looked at least recently moves to the
+  dock. Drag one out to leave it floating; drop it back on the slot to dock it again.
+- **Hologram:** the figure on the stage is `~/.jarvis/avatar.png` (any PNG with a transparent
+  background; it isn't in the repo). Without one, an orb stands in. It reacts to listening,
+  thinking and speaking, and the words beside it light up to match.
 - **Settings (S):** interface sounds, the welcome panels, and every gesture threshold.
 
 - Press **/** to type to JARVIS. Answers worth reading open as panels.
@@ -188,8 +198,8 @@ and [docs/protocol.md](docs/protocol.md) for the WebSocket messages.
 ## Layout
 
 ```
-backend/   main.py (server, /ws), core.py, hud_bridge.py, terminal.py, brain/ (router, providers, budget), memory/ (store, embeddings), voice/ (loop, engines, audio), tools/ (registry, MCP server, tools), auth/google.py, tests/
-frontend/  Vite app: src/hud/ (scene, panels, cursor, transcript, confirm, debug, settings), src/gestures/ (tracker, pose, recognizer, arbiter, controller), src/net/socket.js, tests/
+backend/   main.py (server, /ws), core.py, dashboard.py, hud_bridge.py, terminal.py, brain/ (router, providers, budget), memory/ (store, embeddings), voice/ (loop, engines, audio), tools/ (registry, MCP server, tools), auth/google.py, tests/
+frontend/  Vite app: src/hud/ (scene, layout, frame, panels, hologram, globe, widgets, conversation, cursor, confirm, debug, settings), src/gestures/ (tracker, pose, recognizer, arbiter, controller), src/net/socket.js, tests/
 scripts/   setup.sh, start.sh
 docs/      providers.md, gestures.md, protocol.md, google-setup.md
 ```

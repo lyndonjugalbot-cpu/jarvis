@@ -14,17 +14,21 @@ import logging
 import os
 import secrets
 import sys
+import time
 from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+import dashboard
 from config import BACKEND_DIR, Settings, load_settings
 from core import start_core
 from events import EventBus
 from hud_bridge import HudAssistant, HudBridge
+from tools.weather import home_place
 
 VERSION = "0.1.0"
 AUTH_TIMEOUT_S = 2.0
@@ -58,6 +62,7 @@ def create_app(
     core_factory=start_core,
     auth_timeout_s: float = AUTH_TIMEOUT_S,
     voice_enabled: bool = True,
+    live_dashboard: bool = True,
 ) -> FastAPI:
     bridge = HudBridge()
 
@@ -99,6 +104,9 @@ def create_app(
         app.state.assistant = assistant
         app.state.core = core
         app.state.voice = None
+        app.state.home = None
+        app.state.online = None
+        dashboard_task = asyncio.create_task(dashboard_loop(app, core)) if live_dashboard else None
         if settings.voice.enabled and voice_enabled:
             from voice.service import VoiceService
 
@@ -109,6 +117,8 @@ def create_app(
         try:
             yield
         finally:
+            if dashboard_task:
+                dashboard_task.cancel()
             if app.state.voice:
                 await app.state.voice.stop()
             await core.close()
@@ -120,6 +130,37 @@ def create_app(
     @app.get("/api/health")
     async def health() -> dict:
         return {"status": "ok", "version": VERSION}
+
+    @app.get("/api/avatar")
+    async def avatar():
+        """The hologram's picture: ~/.jarvis/avatar.png, kept out of the repo."""
+        path = settings.data_dir / "avatar.png"
+        if not path.is_file():
+            return JSONResponse({"error": "no avatar"}, status_code=404)
+        return FileResponse(path, media_type="image/png", headers={"Cache-Control": "no-cache"})
+
+    async def dashboard_payload(app: FastAPI, core) -> dict:
+        voice = app.state.voice
+        rows = await dashboard.module_rows(core, voice.state if voice else "off")
+        return {"rows": rows, "home": app.state.home}
+
+    async def dashboard_loop(app: FastAPI, core) -> None:
+        """Telemetry every 3 s and module states every 30 s, while a HUD is connected."""
+        app.state.home = await dashboard.locate_home(home_place(settings.location))
+        dashboard.psutil.cpu_percent(interval=None)  # the first reading primes the counter
+        last_net = last_modules = 0.0
+        while True:
+            await asyncio.sleep(3)
+            if not bridge.connected:
+                continue
+            now = time.monotonic()
+            if now - last_net > 30:
+                app.state.online = await dashboard.internet_reachable()
+                last_net = now
+            await bridge.broadcast("telemetry", dashboard.telemetry(app.state.online))
+            if now - last_modules > 30:
+                await bridge.broadcast("modules", await dashboard_payload(app, core))
+                last_modules = now
 
     async def authenticate(ws: WebSocket) -> bool:
         """The token comes as the first message: browsers can't set WebSocket headers."""
@@ -157,6 +198,8 @@ def create_app(
             await bridge.send(ws, "state", {"state": "idle"})
             voice = app.state.voice
             await bridge.send(ws, "mic", {"state": voice.state if voice else "off", "message": ""})
+            await bridge.send(ws, "telemetry", dashboard.telemetry(app.state.online))
+            bridge.spawn(send_modules(ws))
             while True:
                 try:
                     message = await ws.receive_json()
@@ -168,6 +211,12 @@ def create_app(
             pass
         finally:
             bridge.remove(ws)
+
+    async def send_modules(ws: WebSocket) -> None:
+        try:
+            await bridge.send(ws, "modules", await dashboard_payload(app, app.state.core))
+        except Exception:
+            log.info("couldn't send module states to a HUD that just connected")
 
     async def handle_message(ws: WebSocket, message: dict, assistant: HudAssistant) -> None:
         kind = message.get("type") if isinstance(message, dict) else None

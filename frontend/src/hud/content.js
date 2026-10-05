@@ -1,4 +1,4 @@
-// Panel bodies for each panel type (spec 5.3): text, list, calendar, chart, image.
+// Panel bodies for each panel type (spec 5.3): text, list, calendar, chart, image, files.
 // Everything is built with DOM APIs and textContent, never innerHTML, since data can come from
 // web pages and emails.
 
@@ -74,7 +74,51 @@ function image({ url = "", caption = "" }) {
   return figure;
 }
 
+const FOLDER_ICON = "M3 6.5A1.5 1.5 0 0 1 4.5 5h5l2 2.5h8A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5Z";
+const DOC_ICON = "M6 3h8l4 4v14H6ZM14 3v4h4M9 12h6M9 15.5h6";
+
+function when(modified) {
+  const date = new Date(String(modified).replace(" ", "T"));
+  if (Number.isNaN(date.getTime())) return String(modified ?? "");
+  const days = Math.floor((new Date().setHours(0, 0, 0, 0) - new Date(date).setHours(0, 0, 0, 0)) / 864e5);
+  if (days === 0) return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (days === 1) return "yesterday";
+  return date.toLocaleDateString([], { day: "numeric", month: "short", year: days > 300 ? "numeric" : undefined });
+}
+
+function sizeText(kb) {
+  if (typeof kb !== "number") return "";
+  return kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${Math.max(kb, 0.1)} KB`;
+}
+
+function fileMeta(row) {
+  if (row.folder) return "Folder";
+  const ext = /\.([a-z0-9]{1,6})$/i.exec(String(row.name))?.[1]?.toUpperCase();
+  return [ext, row.modified ? when(row.modified) : "", sizeText(row.size_kb)].filter(Boolean).join("  \u2022  ");
+}
+
+function files({ folder = "", files: rows = [] }) {
+  const box = el("div", "files");
+  const head = el("div", "files-head");
+  head.append(el("span", "files-folder", folder || "Results"), el("span", "files-count", `${rows.length} results`));
+  const ul = el("ul", "file-rows");
+  for (const row of rows) {
+    const li = el("li", "file-row");
+    const path = String(row.path ?? row.name).replace(/^~\//, "");
+    li.title = String(row.path ?? row.name);
+    const icon = svg("svg", { viewBox: "0 0 24 24", class: row.folder ? "folder-icon" : "doc-icon", "aria-hidden": "true" });
+    icon.append(svg("path", { d: row.folder ? FOLDER_ICON : DOC_ICON }));
+    const text = el("span", "file-text");
+    text.append(el("span", "file-name", path), el("span", "file-meta", fileMeta(row)));
+    li.append(icon, text, el("span", "chev", "\u203a"));
+    ul.append(li);
+  }
+  box.append(head, ul);
+  return box;
+}
+
 export function renderBody(type, data) {
+  if (type === "files") return files(Array.isArray(data) ? { files: data } : (data ?? {}));
   if (type === "list") return list(data);
   if (type === "calendar") return calendar(data);
   if (type === "chart") return chart(data ?? {});

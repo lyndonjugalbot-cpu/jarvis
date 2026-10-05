@@ -41,6 +41,14 @@ def _check(kind: str, data: Any) -> Any:
             "kind": data.get("kind") if data.get("kind") in CHART_KINDS else "bar",
             "unit": str(data.get("unit", "")),
         }
+    if kind == "files":
+        rows = data.get("files") if isinstance(data, dict) else data
+        if not isinstance(rows, list) or not all(
+            isinstance(r, dict) and r.get("name") for r in rows
+        ):
+            raise ToolError('files data is [{"name", "path", "modified", "size_kb", "folder"}]')
+        folder = data.get("folder", "") if isinstance(data, dict) else ""
+        return {"folder": str(folder), "files": rows}
     if kind == "image":
         url = data.get("url", "") if isinstance(data, dict) else str(data)
         if urlparse(url).scheme not in ("http", "https"):
@@ -62,12 +70,14 @@ def make_hud_tools(bridge: Any) -> list[ToolSpec]:
                     'calendar: [{"title", "start", "end", "location"}]. '
                     'chart: {"labels": [...], "values": [numbers], '
                     '"kind": "bar"|"line", "unit": ""}. '
-                    'image: {"url": "https://...", "caption": ""}'
+                    'image: {"url": "https://...", "caption": ""}. '
+                    'files: search_files results as they are, or {"folder", "files": [...]}'
                 )
             ),
         ],
         type: Annotated[
-            Literal["text", "list", "calendar", "chart", "image"], Field(description="Panel type")
+            Literal["text", "list", "calendar", "chart", "image", "files"],
+            Field(description="Panel type"),
         ] = "text",
         panel_id: Annotated[
             str, Field(description="An id from an earlier show_panel, to update that panel")

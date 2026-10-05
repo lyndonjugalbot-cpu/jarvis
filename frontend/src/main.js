@@ -7,19 +7,26 @@ import { buildDemo } from "./gestures/demo.js";
 import { createGestureEngine } from "./gestures/engine.js";
 import { startTracker } from "./gestures/tracker.js";
 import { createConfirm } from "./hud/confirm.js";
+import { createConversation } from "./hud/conversation.js";
 import { createCursor } from "./hud/cursor.js";
 import { createDebug } from "./hud/debug.js";
+import { drawFrames } from "./hud/frame.js";
+import { createGlobe } from "./hud/globe.js";
+import { createHologram } from "./hud/hologram.js";
+import { createLayout } from "./hud/layout.js";
 import { PanelManager } from "./hud/panels.js";
 import { createScene } from "./hud/scene.js";
 import { createSettingsDrawer, loadSettings } from "./hud/settings-drawer.js";
 import { createSounds } from "./hud/sounds.js";
-import { setIndicator, startClock } from "./hud/statusbar.js";
-import { createTranscript } from "./hud/transcript.js";
+import { setIndicator, setIndicatorLabel, startClock } from "./hud/statusbar.js";
+import { createBars, createGauge, createHistory, createRows, createWave } from "./hud/widgets.js";
 import { createSocket } from "./net/socket.js";
 
 const $ = (id) => document.getElementById(id);
 // Gestures worth telling the core about (for context and the log).
 const REPORTED_GESTURES = new Set(["tap", "minimize", "maximize", "restore", "swipe", "confirm", "cancel"]);
+const TOAST_MS = 6000;
+const WIDGET_FRAME_S = 1 / 30;
 
 const STARTER_PANELS = [
   {
@@ -29,7 +36,6 @@ const STARTER_PANELS = [
     data:
       "Hold up an open palm for half a second to arm gestures. Point to aim, pinch to tap or grab, " +
       "make a fist to minimize, and spread two pinched hands to maximize.",
-    position: { x: -3.8, y: 0.9, z: 0 },
   },
   {
     id: "gestures",
@@ -44,7 +50,6 @@ const STARTER_PANELS = [
       "Swipe down: close",
       "Thumbs up / down: confirm / cancel",
     ],
-    position: { x: 3.8, y: 0.9, z: 0 },
   },
 ];
 
@@ -67,13 +72,26 @@ function savePrefs() {
 const prefs = loadPrefs();
 const sounds = createSounds({ enabled: prefs.sounds });
 
-// ---------------------------------------------------------------- HUD
+// ---------------------------------------------------------------- dashboard
+drawFrames();
 const settings = loadSettings();
 const view = createScene($("scene"), $("css-layer"));
-const panels = new PanelManager(view, $("dock"));
+const layout = createLayout(view);
+const panels = new PanelManager(view, layout, { slot: $("panel-slot"), dock: $("dock") });
+const hologram = createHologram(view, layout, $("stage"));
+const globe = createGlobe(view, layout, $("globe-slot"), $("globe-label"));
+const gauge = createGauge($("gauge"));
+const bars = createBars($("bars"), ["Memory", "Disk", "Power", "API spend"]);
+const systemRows = createRows($("system-status"));
+const moduleRows = createRows($("modules"));
+const wave = createWave($("audio-wave"));
+const history = createHistory($("analysis"));
+const askWave = [...$("ask-wave").children];
+startClock($("clock"), $("date"));
+
 if (prefs.welcome) {
   for (const spec of STARTER_PANELS) panels.add(spec);
-  panels.focus(panels.panels[0]);
+  panels.focus(panels.find("welcome"));
   prefs.welcome = false; // a clean HUD from the next start; turn them back on in settings (S)
   savePrefs();
 }
@@ -86,75 +104,171 @@ for (const box of document.querySelectorAll(".hud-settings input")) {
   });
 }
 
+// What the System status widget shows; filled in by the messages below.
+const system = { core: "connecting", memory: null, network: null, camera: false, mic: "off", uptime: null };
+const LOOK = {
+  online: "online",
+  active: "online",
+  connected: "online",
+  ready: "online",
+  listening: "online",
+  "wake word": "online",
+  stable: "online",
+  on: "online",
+  standby: "idle",
+  connecting: "idle",
+  checking: "idle",
+  starting: "idle",
+  "cooling down": "warn",
+  high: "warn",
+  offline: "warn",
+};
+function showSystem() {
+  const memory = system.memory == null ? "--" : system.memory < 85 ? "stable" : "high";
+  const network = system.network == null ? "checking" : system.network ? "connected" : "offline";
+  const audio = { off: "off", starting: "starting", wake: "wake word", listening: "listening", unavailable: "unavailable" };
+  const rows = [
+    { name: "Core systems", value: system.core },
+    { name: "Memory", value: memory },
+    { name: "Network", value: network },
+    { name: "Camera", value: system.camera ? "on" : "off" },
+    { name: "Audio", value: audio[system.mic] ?? system.mic },
+  ];
+  if (system.uptime != null) rows.push({ name: "Uptime", value: `${system.uptime} h`, look: "online" });
+  systemRows.set(rows.map((row) => ({ look: LOOK[row.value] ?? "off", ...row })));
+}
+showSystem();
+
+// The words beside the hologram light up with what JARVIS is doing.
+const MODE = { idle: "monitor", listening: "analyze", thinking: "process", speaking: "assist" };
+let voiceState = "idle";
+function showMode() {
+  const mode = confirmPrompt.pending ? "protect" : (MODE[voiceState] ?? "monitor");
+  for (const li of $("stage-modes").children) li.classList.toggle("on", li.dataset.mode === mode);
+}
+
+// A one-line note under the stage for HUD feedback (gestures, camera, errors); it fades out.
+let toastTimer = 0;
+function say(text) {
+  const toast = $("toast");
+  toast.textContent = text;
+  toast.classList.remove("fade");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.add("fade"), TOAST_MS);
+}
+
 // ---------------------------------------------------------------- link to the core
 const token = import.meta.env.VITE_JARVIS_TOKEN ?? "";
 const socket = createSocket({
   url: `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/ws`,
   token,
   onStatus(status) {
-    const text = { online: "online", connecting: "connecting", offline: "offline" }[status];
-    if (status === "online") setIndicator("core", "online");
-    else if (status === "connecting") setIndicator("core", "idle", text);
-    else setIndicator("core", "offline", text ?? (status === "unauthorized" ? "token mismatch" : "refused"));
+    if (status === "online") setIndicator("core", "online", "online");
+    else if (status === "connecting") setIndicator("core", "idle", "connecting");
+    else {
+      const why = { unauthorized: "token mismatch", forbidden: "refused" }[status] ?? "offline";
+      setIndicator("core", "offline", why);
+    }
+    system.core = status === "online" ? "online" : status === "connecting" ? "connecting" : "offline";
+    showSystem();
     if (status === "unauthorized") {
       say(token ? "The core rejected the HUD token. Re-run scripts/setup.sh and restart both." : "No HUD token: run scripts/setup.sh.");
     }
   },
 });
-const transcript = createTranscript($("transcript"), {
+const conversation = createConversation({
+  messages: $("messages"),
+  tags: $("conv-tags"),
+  status: $("turn-status"),
+  chips: $("turn-chips"),
+  form: $("ask"),
   onSubmit(text) {
     if (socket.send("user_text", { text })) return true;
-    say("Not connected to the core yet. Start it with scripts/start.sh core.");
+    say("Not connected to the core yet. Start it with scripts/start.sh.");
     return false;
   },
 });
 const confirmPrompt = createConfirm($("confirm"), {
   onAnswer(actionId, approved) {
     socket.send("confirm", { actionId, approved });
+    setTimeout(showMode, 0); // after the prompt has closed
   },
 });
+showMode();
 
-function say(text) {
-  transcript.status(text);
-}
-
-function setOrb(state) {
-  const orb = document.querySelector(".orb");
-  orb.dataset.state = state;
-  orb.setAttribute("aria-label", `JARVIS is ${state}`);
-}
-
-socket.on("state", ({ state }) => setOrb(state));
+socket.on("state", ({ state }) => {
+  voiceState = state;
+  hologram.setState(state);
+  conversation.setState(state);
+  showMode();
+});
 socket.on("transcript", ({ role, text, provider, tools, seconds, cost }) => {
-  const parts = role === "jarvis" && provider ? [provider, `${seconds}s`, ...(tools ?? [])] : [];
-  if (cost) parts.push(`$${cost.toFixed(4)}`);
-  const meta = parts.join(" | ");
-  transcript.add(role, text, meta);
+  conversation.add(role, text, { provider, tools, seconds, cost });
 });
 socket.on("error", ({ message }) => say(message));
 
-// Microphone: the core listens for "Hey Jarvis"; clicking the Mic indicator switches it on or off.
-const MIC_TEXT = { off: "off", starting: "starting", wake: '"Hey Jarvis"', listening: "listening", unavailable: "unavailable" };
+socket.on("telemetry", ({ cpu, memory, disk, battery, charging, network, uptime_h }) => {
+  gauge.set(cpu);
+  if (!tracker) history.push(cpu);
+  bars.set("Memory", memory, undefined, memory >= 90);
+  bars.set("Disk", disk, undefined, disk >= 90);
+  if (battery == null) bars.set("Power", 100, "AC");
+  else bars.set("Power", battery, `${battery}%${charging ? " +" : ""}`, battery < 20 && !charging);
+  Object.assign(system, { memory, network, uptime: uptime_h });
+  showSystem();
+});
+socket.on("modules", ({ rows, home }) => {
+  moduleRows.set(rows.map(({ name, state }) => ({ name, value: state, look: LOOK[state] ?? "off" })));
+  globe.setHome(home);
+});
+socket.on("audio", ({ levels }) => {
+  wave.push(levels);
+  hologram.setLevel(Math.max(...levels, 0));
+});
+
+// Microphone: the core listens for "Hey Jarvis"; the Mic indicator and the mic button switch it.
+const MIC = {
+  off: ["off", "off", ""],
+  starting: ["idle", "starting", ""],
+  wake: ["online", '"Hey Jarvis"', "active"],
+  listening: ["armed", "listening", ""],
+  unavailable: ["offline", "unavailable", ""],
+};
 const micIndicator = document.querySelector('[data-indicator="mic"]');
+const micButton = $("mic-button");
 let micState = "off";
+micButton.dataset.state = "off";
 socket.on("mic", ({ state, message }) => {
   micState = state;
-  const look = { wake: "online", listening: "armed", starting: "idle", unavailable: "offline" }[state] ?? "off";
-  setIndicator("mic", look, MIC_TEXT[state] ?? state);
+  const [look, text, sub] = MIC[state] ?? ["off", state, ""];
+  setIndicator("mic", look, text, sub);
+  micButton.dataset.state = state;
   micIndicator.title = message || (state === "off" ? "Click to turn the microphone on" : "Click to turn the microphone off");
+  micButton.title = micIndicator.title;
+  system.mic = state;
+  showSystem();
+  if (state === "off") wave.clear();
   if (message && state !== "wake") say(message);
 });
-micIndicator.addEventListener("click", () => {
+function toggleMic() {
   if (micState === "unavailable" || micState === "starting") return;
-  socket.send("mic", { on: micState === "off" });
-});
+  if (!socket.send("mic", { on: micState === "off" })) say("Not connected to the core yet.");
+}
+micIndicator.addEventListener("click", toggleMic);
+micButton.addEventListener("click", toggleMic);
+
 socket.on("provider", ({ label, paid, coolingDown, order, budget }) => {
   const name = label || order?.[0] || "no provider";
-  const spend = budget ? ` $${budget.spent_usd.toFixed(2)}/$${budget.cap_usd}` : "";
-  setIndicator("brain", paid ? "paid" : label ? "online" : "idle", paid ? `${name} | PAID${spend}` : name);
+  setIndicator("brain", paid ? "paid" : label ? "online" : "idle", paid ? `${name} | paid` : name);
   document.querySelector('[data-indicator="brain"]').title = coolingDown?.length
     ? `Cooling down: ${coolingDown.join(", ")}`
     : "";
+  if (budget) {
+    const pct = budget.cap_usd ? (100 * budget.spent_usd) / budget.cap_usd : 0;
+    bars.set("API spend", pct, `$${budget.spent_usd.toFixed(2)}`, pct >= 80);
+  } else {
+    bars.set("API spend", 0, "off");
+  }
 });
 socket.on("show_panel", ({ panel }) => {
   if (!panels.find(panel.id)) sounds.play("open");
@@ -172,9 +286,13 @@ socket.on("close_panel", ({ panelId }) => {
 socket.on("confirm_request", (request) => {
   sounds.play("alert");
   confirmPrompt.show(request);
+  showMode();
   say("Approve with a thumbs up (or Y), cancel with a thumbs down (or N).");
 });
-socket.on("confirm_done", ({ actionId }) => confirmPrompt.done(actionId));
+socket.on("confirm_done", ({ actionId }) => {
+  confirmPrompt.done(actionId);
+  showMode();
+});
 
 // Google access was lost (or never set up): offer the browser sign-in on this computer.
 const notice = $("notice");
@@ -198,15 +316,20 @@ socket.on("auth_done", ({ ok, message }) => {
 // ---------------------------------------------------------------- gestures
 const cursor = createCursor($("cursor"));
 const engine = createGestureEngine(settings);
+let tracker = null;
+let cameraFps = 0;
+let replaying = null;
+let recording = null;
+let mouseDrag = null;
+
 function showGestureState() {
   if (!tracker) return;
-  const rate = Math.round(fps);
-  const text = `${engine.armed ? "armed" : "disarmed"} | ${rate} fps`;
+  const rate = Math.round(cameraFps);
   const low = rate > 0 && rate < 20;
-  setIndicator("gestures", low ? "warn" : engine.armed ? "armed" : "idle", text);
+  setIndicator("gestures", low ? "warn" : engine.armed ? "armed" : "idle", engine.armed ? "armed" : "disarmed");
   document.querySelector('[data-indicator="gestures"]').title = low
-    ? "Low frame rate: try more light on your hands, or close other heavy apps."
-    : "";
+    ? `Hand tracking at ${rate} fps: try more light on your hands, or close other heavy apps.`
+    : `Hand tracking at ${rate} fps`;
 }
 setInterval(showGestureState, 1000);
 
@@ -216,18 +339,15 @@ const controller = createController({
   settings,
   say,
   setIndicator: (name, state, text) => (name === "gestures" && tracker ? showGestureState() : setIndicator(name, state, text)),
-  onConfirm: (approved) => confirmPrompt.answer(approved),
+  onConfirm: (approved) => {
+    const answered = confirmPrompt.answer(approved);
+    showMode();
+    return answered;
+  },
 });
 const debug = createDebug($("debug"), $("camera"));
 const drawer = createSettingsDrawer($("settings"), settings);
-startClock($("clock"));
-
-let tracker = null;
-let source = "none";
-let fps = 0;
-let replaying = null;
-let recording = null;
-let mouseDrag = null;
+$("conv-menu").addEventListener("click", () => drawer.toggle());
 
 const GESTURE_SOUNDS = { armed: "armed", drag_start: "grab", maximize: "open", restore: "open", minimize: "close" };
 
@@ -238,7 +358,7 @@ function feed(frame, from) {
     if (GESTURE_SOUNDS[e.type]) sounds.play(GESTURE_SOUNDS[e.type]);
     if (e.type === "swipe" && e.direction === "down") sounds.play("close");
   }
-  debug.show(frame, engine.hands, events, { fps, armed: engine.armed, source: from });
+  debug.show(frame, engine.hands, events, { fps: cameraFps, armed: engine.armed, source: from });
   for (const e of events) {
     if (!REPORTED_GESTURES.has(e.type)) continue;
     const gesture = e.type === "swipe" ? `swipe_${e.direction}` : e.type;
@@ -247,13 +367,22 @@ function feed(frame, from) {
 }
 
 // ---------------------------------------------------------------- camera
+// While the camera is on, the chart under Audio input shows hand tracking; otherwise CPU history.
+function showCamera(on) {
+  system.camera = on;
+  showSystem();
+  $("camera-toggle").textContent = on ? "Stop camera" : "Start camera";
+  $("analysis-title").textContent = on ? "Visual analysis" : "CPU history";
+  history.reset();
+}
+showCamera(false);
+
 async function toggleCamera() {
   if (tracker) {
     tracker.stop();
     tracker = null;
-    source = "none";
     setIndicator("gestures", "off", "camera off");
-    $("camera-toggle").textContent = "Start camera";
+    showCamera(false);
     say("Camera off.");
     return;
   }
@@ -264,22 +393,26 @@ async function toggleCamera() {
       video: $("camera"),
       settings,
       onFrame(frame, rate) {
-        fps = rate;
+        cameraFps = rate;
         if (replaying) return;
         recording?.push(frame);
         feed(frame, "camera");
       },
     });
-    source = "camera";
-    $("camera-toggle").textContent = "Stop camera";
+    showCamera(true);
     setIndicator("gestures", engine.armed ? "armed" : "idle", engine.armed ? "armed" : "disarmed");
     say("Camera on. Hold up an open palm for half a second to arm gestures.");
   } catch (err) {
     tracker = null;
     setIndicator("gestures", "off", "camera off");
+    showCamera(false);
     say(`Couldn't start hand tracking: ${err.message}`);
   }
 }
+// Hand tracking for the chart: the frame rate, as a share of 60 fps.
+setInterval(() => {
+  if (tracker) history.push((100 * cameraFps) / 60);
+}, 1000);
 
 // ---------------------------------------------------------------- replay, demo, recording
 function replay(frames) {
@@ -364,8 +497,11 @@ canvas.addEventListener("dblclick", (e) => {
 
 let panelCount = 0;
 const KEYS = {
-  "/": () => transcript.focus(),
-  y: () => confirmPrompt.answer(true),
+  "/": () => conversation.focus(),
+  y: () => {
+    confirmPrompt.answer(true);
+    showMode();
+  },
   c: toggleCamera,
   p: playDemo,
   d: () => debug.toggle(),
@@ -373,13 +509,15 @@ const KEYS = {
   r: toggleRecording,
   "?": () => ($("help").hidden = !$("help").hidden),
   n: () => {
-    if (confirmPrompt.answer(false)) return;
+    if (confirmPrompt.answer(false)) {
+      showMode();
+      return;
+    }
     panelCount += 1;
     panels.add({
       id: `note-${panelCount}`,
       title: `Panel ${panelCount}`,
       data: "A new panel. Pinch to grab it, or make a fist to minimize it.",
-      position: { x: (Math.random() - 0.5) * 4, y: (Math.random() - 0.5) * 2, z: 0 },
     });
   },
   arrowright: () => panels.cycleFocus(1),
@@ -404,16 +542,44 @@ $("camera-toggle").addEventListener("click", toggleCamera);
 
 // ---------------------------------------------------------------- render loop
 let last = performance.now();
+let widgetClock = 0;
+let frames = 0;
+let fpsSince = last;
 function frame(now) {
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
   stepReplay(now);
   panels.update(dt, cursor.position);
+  hologram.update(dt, { hidden: Boolean(panels.maximized) });
+  globe.update(dt);
+  widgetClock += dt;
+  if (widgetClock >= WIDGET_FRAME_S) {
+    gauge.draw(widgetClock);
+    wave.draw(widgetClock);
+    history.draw();
+    const level = wave.latest();
+    askWave.forEach((bar, i) => {
+      const height = 20 + Math.min(1, level * (1.6 - Math.abs(i - 2) * 0.3)) * 80;
+      bar.style.height = `${Math.round(height)}%`;
+    });
+    widgetClock = 0;
+  }
   view.render();
+
+  frames += 1;
+  if (now - fpsSince >= 1000) {
+    const fps = Math.round((frames * 1000) / (now - fpsSince));
+    setIndicatorLabel("fps", `${fps} fps`);
+    const [look, word] = fps >= 50 ? ["online", "stable"] : fps >= 30 ? ["idle", "fair"] : ["warn", "low"];
+    setIndicator("fps", look, word);
+    frames = 0;
+    fpsSince = now;
+  }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
-// Dev hooks: replay a recorded session from the console, or open with ?demo to play the demo.
-window.jarvis = { replay, playDemo, panels, engine, settings, view };
+// Dev hooks: replay a recorded session or fake a core message from the console
+// (jarvis.socket.emit("show_panel", {...})), or open with ?demo to play the gesture demo.
+window.jarvis = { replay, playDemo, panels, engine, settings, view, hologram, globe, socket };
 if (new URLSearchParams(window.location.search).has("demo")) setTimeout(playDemo, 800);

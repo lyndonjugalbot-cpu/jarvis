@@ -94,13 +94,16 @@ class Speaker:
             if position >= len(data):
                 raise sd.CallbackStop
 
+        def on_finished() -> None:  # PortAudio calls this from C and wants None back
+            loop.call_soon_threadsafe(finished.set)
+
         stream = sd.OutputStream(
             samplerate=sample_rate,
             channels=1,
             dtype="float32",
             device=self._device,
             callback=callback,
-            finished_callback=lambda: loop.call_soon_threadsafe(finished.set),
+            finished_callback=on_finished,
         )
         with stream:
             await finished.wait()
