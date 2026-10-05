@@ -59,12 +59,13 @@ class Brain:
             return ()
         return tuple(lines)
 
-    async def ask(self, text: str) -> Reply:
+    async def ask(self, text: str, *, screen: str = "") -> Reply:
         turn = Turn(
             id=uuid.uuid4().hex[:12],
             text=text,
             history=tuple(self._history[-2 * self._history_turns :]),
             memory=await self._recall(text),
+            screen=screen,
         )
         self._registry.begin_turn(turn.id)
         started = time.monotonic()

@@ -35,6 +35,7 @@ If the connection drops, the HUD reconnects with backoff (0.5 s, doubling up to 
 | `gesture_event` | `{ "gesture": "swipe_right", "panelId": "p12" }` | Logged now, used as context later |
 | `connect_google` | `{}` | Run Google's browser sign-in on the core's computer |
 | `mic` | `{ "on": true }` | Switch the core's microphone on or off |
+| `model_state` | `{ "model": "Jet engine" \| null, "part": "Fan" \| null, "explode": 0..1 }` | What the hologram stage shows; each request tells the brain, so "what's this part?" works |
 
 ## Core -> HUD
 
@@ -53,6 +54,8 @@ If the connection drops, the HUD reconnects with backoff (0.5 s, doubling up to 
 | `auth_needed` | `{ "service": "google", "message": "..." }` | Access was lost; the HUD shows a Connect button |
 | `auth_done` | `{ "service": "google", "ok": true, "message": "..." }` | How the sign-in went |
 | `error` | `{ "message": "..." }` | A friendly error to show |
+| `show_model` | `{ "id": "jet-engine" \| "file:robot.glb", "title", "file"?, "explode": 0..1 }` | Show a holographic model on the stage |
+| `close_model` | `{}` | Put the model away |
 | `telemetry` | `{ "cpu", "memory", "disk", "battery", "charging", "network", "uptime_h" }` | This computer's load (percentages; `battery` is null without one), every 3 s and on connect |
 | `modules` | `{ "rows": [{ "name", "state" }], "home": { "name", "lat", "lon" } \| null }` | Each provider (online, off, cooling down, standby), memory, Google and voice; and home for the globe. Every 30 s and on connect |
 | `audio` | `{ "levels": [0..1, ...] }` | Microphone levels while the mic is on, a few at a time, for the waveform |
@@ -60,6 +63,12 @@ If the connection drops, the HUD reconnects with backoff (0.5 s, doubling up to 
 `confirm_done` isn't in the spec's message table. It was added so every open HUD closes its
 prompt when the request is settled. `telemetry`, `modules` and `audio` feed the dashboard's
 instruments.
+
+`GET /api/holograms` lists the models the stage can show: the built-ins (jet engine, quadcopter
+drone, arc reactor) and any `.glb`/`.gltf` files in `~/.jarvis/holograms`, which
+`GET /api/holograms/{name}` serves (with a `.gltf` file's `.bin` and textures from the same
+folder). Each mesh in a file becomes a part that moves straight out from the center when the
+model is broken apart.
 
 `GET /api/avatar` serves `~/.jarvis/avatar.png`, the figure on the hologram stage (404 when there
 isn't one; the HUD then shows an orb).

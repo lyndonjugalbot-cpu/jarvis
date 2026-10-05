@@ -86,7 +86,7 @@ async def start_core(
         *(make_memory_tools(memory) if memory else []),
     ]
     if hud is not None:
-        tools += make_hud_tools(hud)
+        tools += make_hud_tools(hud, settings.data_dir / "holograms")
     registry = ToolRegistry(
         tools, confirmer=confirmer, confirm_timeout_s=settings.confirm_timeout_s
     )

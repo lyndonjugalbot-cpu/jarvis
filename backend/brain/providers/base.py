@@ -10,6 +10,7 @@ class Turn:
     text: str
     history: tuple[tuple[str, str], ...] = ()  # earlier (role, text) pairs, oldest first
     memory: tuple[str, ...] = ()  # facts and recalled snippets from earlier sessions
+    screen: str = ""  # what the HUD is showing that the user may refer to ("this part")
 
 
 @dataclass
@@ -38,6 +39,8 @@ def compose(turn: Turn, *, include_history: bool = True, max_chars: int = HISTOR
         parts.append(
             f"Earlier in this conversation (context only; it already happened):\n{context}"
         )
+    if turn.screen:
+        parts.append(f"On the HUD right now: {turn.screen}")
     if not parts:
         return turn.text
     return "\n\n".join([*parts, f"New message:\n{turn.text}"])

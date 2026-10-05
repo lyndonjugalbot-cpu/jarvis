@@ -17,6 +17,7 @@ import sys
 import time
 from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -28,6 +29,7 @@ from config import BACKEND_DIR, Settings, load_settings
 from core import start_core
 from events import EventBus
 from hud_bridge import HudAssistant, HudBridge
+from tools.hud import MODEL_ASSETS, available_models
 from tools.weather import home_place
 
 VERSION = "0.1.0"
@@ -131,6 +133,25 @@ def create_app(
     async def health() -> dict:
         return {"status": "ok", "version": VERSION}
 
+    holograms = settings.data_dir / "holograms"
+
+    @app.get("/api/holograms")
+    async def hologram_list():
+        """Models the stage can show: built in, plus .glb/.gltf files in ~/.jarvis/holograms."""
+        return {"models": available_models(holograms)}
+
+    @app.get("/api/holograms/{name}")
+    async def hologram_file(name: str):
+        path = holograms / name
+        if (
+            name != Path(name).name
+            or name.startswith(".")
+            or path.suffix.lower() not in MODEL_ASSETS
+            or not path.is_file()
+        ):
+            return JSONResponse({"error": "no such model file"}, status_code=404)
+        return FileResponse(path)
+
     @app.get("/api/avatar")
     async def avatar():
         """The hologram's picture: ~/.jarvis/avatar.png, kept out of the repo."""
@@ -225,6 +246,8 @@ def create_app(
             bridge.spawn(assistant.handle_text(str(payload.get("text", ""))[:MAX_TEXT]))
         elif kind == "confirm":
             bridge.resolve(str(payload.get("actionId", "")), payload.get("approved") is True)
+        elif kind == "model_state":
+            bridge.note_model(payload)
         elif kind == "gesture_event":
             log.info("gesture %s on panel %s", payload.get("gesture"), payload.get("panelId"))
         elif kind == "mic":

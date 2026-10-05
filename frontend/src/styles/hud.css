@@ -636,6 +636,11 @@ button {
   text-shadow: 0 0 10px var(--cyan);
 }
 
+/* While a model is on the stage, the conversation shrinks to give it room. */
+body.model-open .conversation {
+  max-height: 27%;
+}
+
 /* ---------------------------------------------------------------- input bar */
 .toast {
   margin: -8px 0 -6px;

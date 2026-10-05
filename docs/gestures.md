@@ -37,6 +37,23 @@ in the settings drawer (press **S**). Changes apply immediately and are saved in
 One deviation from the spec table: swipes left and right also need an open palm. Otherwise
 moving the cursor quickly while pointing would swipe.
 
+### On a holographic model
+
+While a model is on the stage (ask JARVIS to "show me a jet engine", or press **O**), the same
+gestures work it. Panels still come first: a hand over a panel works the panel.
+
+| Gesture | Over the stage |
+| --- | --- |
+| Point | Highlights the part under the cursor |
+| Pinch tap | Selects that part (amber) and opens its description as a panel; tap it again to clear |
+| Pinch hold, then move | Turns the model; let go mid-move to flick it spinning |
+| Two-hand spread / squeeze | Anywhere not on a panel: breaks the model into its parts as the hands move apart, and puts it back as they come together. It follows the hands continuously instead of maximizing |
+| Fist | Puts the model back together; a second fist puts it away |
+| Swipe left/right | Next / previous model |
+| Swipe down | Puts the model away |
+
+The mouse works too: drag to turn, click a part, scroll or double-click to break it apart.
+
 ## Look-alike rules (spec 7.1)
 
 - **One gesture at a time:** two-hand gestures beat one-hand gestures, holds beat swipes, and

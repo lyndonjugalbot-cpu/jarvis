@@ -14,6 +14,7 @@ import { drawFrames } from "./hud/frame.js";
 import { createGlobe } from "./hud/globe.js";
 import { createHologram } from "./hud/hologram.js";
 import { createLayout } from "./hud/layout.js";
+import { createModelView } from "./hud/model-view.js";
 import { PanelManager } from "./hud/panels.js";
 import { createScene } from "./hud/scene.js";
 import { createSettingsDrawer, loadSettings } from "./hud/settings-drawer.js";
@@ -79,6 +80,7 @@ const view = createScene($("scene"), $("css-layer"));
 const layout = createLayout(view);
 const panels = new PanelManager(view, layout, { slot: $("panel-slot"), dock: $("dock") });
 const hologram = createHologram(view, layout, $("stage"));
+const modelView = createModelView(view, layout, $("stage"), { onChange: modelChanged });
 const globe = createGlobe(view, layout, $("globe-slot"), $("globe-label"));
 const gauge = createGauge($("gauge"));
 const bars = createBars($("bars"), ["Memory", "Disk", "Power", "API spend"]);
@@ -145,6 +147,62 @@ let voiceState = "idle";
 function showMode() {
   const mode = confirmPrompt.pending ? "protect" : (MODE[voiceState] ?? "monitor");
   for (const li of $("stage-modes").children) li.classList.toggle("on", li.dataset.mode === mode);
+}
+
+// ---------------------------------------------------------------- holographic models
+// While a model is on the stage, the caption beside it says how to work it, a selected part's
+// description opens as a panel, and the core hears what's showing (so "what's this part?" works).
+const stageInfo = $("stage-info");
+const stageInfoDefault = [...stageInfo.childNodes].map((node) => node.cloneNode(true));
+let stageTitle = null;
+let shownPart = null;
+let modelReport = 0;
+
+function showStageInfo(title) {
+  if (title === stageTitle) return;
+  stageTitle = title;
+  if (!title) {
+    stageInfo.replaceChildren(...stageInfoDefault.map((node) => node.cloneNode(true)));
+    return;
+  }
+  const name = document.createElement("b");
+  name.textContent = title;
+  const lines = [`${modelView.partCount} parts`, "Two hands: break apart", "Pinch a part: details", "Fist: put back"];
+  stageInfo.replaceChildren(
+    name,
+    ...lines.map((text) => {
+      const line = document.createElement("span");
+      line.textContent = text;
+      return line;
+    }),
+  );
+}
+
+function modelChanged({ model, part, explode, selected }) {
+  document.body.classList.toggle("model-open", Boolean(model));
+  showStageInfo(model);
+  if (selected !== shownPart) {
+    shownPart = selected;
+    if (selected) panels.show({ id: "model-part", type: "text", title: selected.name, data: selected.info });
+    else panels.close(panels.find("model-part"));
+  }
+  clearTimeout(modelReport);
+  modelReport = setTimeout(() => socket.send("model_state", { model, part, explode }), 250);
+}
+
+function showModel(spec, options) {
+  modelView
+    .show(spec, options)
+    .then((title) => title && say(`${title}. Spread two pinched hands to break it apart.`))
+    .catch((err) => say(`Couldn't show that model: ${err.message}`));
+}
+
+function cycleModel(step) {
+  if (!modelView.active) return showModel("jet-engine");
+  modelView
+    .cycle(step)
+    .then((title) => title && say(`${title}.`))
+    .catch((err) => say(`Couldn't show that model: ${err.message}`));
 }
 
 // A one-line note under the stage for HUD feedback (gestures, camera, errors); it fades out.
@@ -283,6 +341,8 @@ socket.on("close_panel", ({ panelId }) => {
   if (panel) sounds.play("close");
   panels.close(panel);
 });
+socket.on("show_model", (spec) => showModel(spec, { explode: spec.explode ?? 0 }));
+socket.on("close_model", () => modelView.close());
 socket.on("confirm_request", (request) => {
   sounds.play("alert");
   confirmPrompt.show(request);
@@ -335,6 +395,7 @@ setInterval(showGestureState, 1000);
 
 const controller = createController({
   panels,
+  model: modelView,
   cursor,
   settings,
   say,
@@ -470,30 +531,66 @@ function toggleRecording() {
 const canvas = $("scene");
 const toUnit = (e) => ({ x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight });
 
+let mouseTurn = null; // dragging on the model turns it; a click without moving picks a part
+
 canvas.addEventListener("pointerdown", (e) => {
   const p = toUnit(e);
   const panel = panels.hit(p.x, p.y);
-  if (!panel) return;
-  mouseDrag = panel;
-  panels.grab(panel, p.x, p.y);
+  if (panel) {
+    mouseDrag = panel;
+    panels.grab(panel, p.x, p.y);
+  } else if (modelView.contains(p.x, p.y)) {
+    mouseTurn = { x: p.x, y: p.y, moved: false };
+    modelView.beginTurn(p.x, p.y);
+  } else {
+    return;
+  }
   canvas.setPointerCapture(e.pointerId);
 });
 canvas.addEventListener("pointermove", (e) => {
   const p = toUnit(e);
-  if (mouseDrag) panels.dragTo(mouseDrag, p.x, p.y);
-  else if (!tracker && !replaying) panels.hover(panels.hit(p.x, p.y));
+  if (mouseTurn) {
+    if (Math.hypot(p.x - mouseTurn.x, p.y - mouseTurn.y) > 0.004) mouseTurn.moved = true;
+    modelView.turnTo(p.x, p.y);
+  } else if (mouseDrag) {
+    panels.dragTo(mouseDrag, p.x, p.y);
+  } else if (!tracker && !replaying) {
+    const panel = panels.hit(p.x, p.y);
+    panels.hover(panel);
+    modelView.hover(!panel && modelView.contains(p.x, p.y) ? modelView.hit(p.x, p.y) : null);
+  }
 });
-canvas.addEventListener("pointerup", () => {
+canvas.addEventListener("pointerup", (e) => {
+  if (mouseTurn) {
+    modelView.endTurn();
+    if (!mouseTurn.moved) {
+      const p = toUnit(e);
+      const part = modelView.select(modelView.hit(p.x, p.y));
+      if (part) say(`${part.name}.`);
+    }
+    mouseTurn = null;
+  }
   panels.release(mouseDrag);
   mouseDrag = null;
 });
 canvas.addEventListener("dblclick", (e) => {
   const p = toUnit(e);
   const panel = panels.hit(p.x, p.y);
-  if (!panel) return;
+  if (!panel) {
+    if (modelView.contains(p.x, p.y)) modelView.toggleExplode();
+    return;
+  }
   if (panel.state === "maximized") panels.restore(panel);
   else panels.maximize(panel);
 });
+canvas.addEventListener(
+  "wheel",
+  (e) => {
+    const p = toUnit(e);
+    if (modelView.contains(p.x, p.y)) modelView.setExplode(modelView.explode + e.deltaY * 0.0015);
+  },
+  { passive: true },
+);
 
 let panelCount = 0;
 const KEYS = {
@@ -520,6 +617,10 @@ const KEYS = {
       data: "A new panel. Pinch to grab it, or make a fist to minimize it.",
     });
   },
+  o: () => (modelView.active ? modelView.close() : showModel("jet-engine")),
+  "]": () => cycleModel(1),
+  "[": () => cycleModel(-1),
+  e: () => (modelView.active ? modelView.toggleExplode() : say("Press O to show a model first.")),
   arrowright: () => panels.cycleFocus(1),
   arrowleft: () => panels.cycleFocus(-1),
   m: () => panels.minimize(panels.focused),
@@ -550,7 +651,8 @@ function frame(now) {
   last = now;
   stepReplay(now);
   panels.update(dt, cursor.position);
-  hologram.update(dt, { hidden: Boolean(panels.maximized) });
+  hologram.update(dt, { hidden: Boolean(panels.maximized), figure: !modelView.active });
+  modelView.update(dt, { hidden: Boolean(panels.maximized) });
   globe.update(dt);
   widgetClock += dt;
   if (widgetClock >= WIDGET_FRAME_S) {
@@ -581,5 +683,5 @@ requestAnimationFrame(frame);
 
 // Dev hooks: replay a recorded session or fake a core message from the console
 // (jarvis.socket.emit("show_panel", {...})), or open with ?demo to play the gesture demo.
-window.jarvis = { replay, playDemo, panels, engine, settings, view, hologram, globe, socket };
+window.jarvis = { replay, playDemo, panels, engine, settings, view, hologram, globe, socket, modelView };
 if (new URLSearchParams(window.location.search).has("demo")) setTimeout(playDemo, 800);

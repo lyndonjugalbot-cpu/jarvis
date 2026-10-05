@@ -104,7 +104,7 @@ Settings are in `backend/config.toml`. Logs and notes are in `~/.jarvis/`.
 | This computer | `system_stats`, `open_app`, `open_url` (http/https only) | No |
 | Web | `web_search` (DuckDuckGo; for the local model and paid API; the plan CLIs use their own) | No |
 | Memory | `remember`, `recall`, `forget` | Forgetting |
-| Screen | `show_panel`, `close_panel` | No |
+| Screen | `show_panel`, `close_panel`, `show_model`, `close_model` | No |
 | Google account | `connect_google` | No |
 
 Calendar and Gmail need a one-time setup of your own Google Cloud project:
@@ -176,6 +176,11 @@ and which modules are ready.
 - **Panels:** text, lists, calendar agendas, bar and line charts, images and file results. They
   open in the slot on the left, two at a time; the one you looked at least recently moves to the
   dock. Drag one out to leave it floating; drop it back on the slot to dock it again.
+- **Holographic models:** ask JARVIS to "show me a jet engine" (or a drone, or an arc reactor),
+  or press **O**. Spread two pinched hands to break it into its parts and squeeze to put it back;
+  pinch-drag to turn it; pinch a part for a description, and then ask JARVIS about "this part".
+  Drop your own `.glb` files into `~/.jarvis/holograms` and ask for them by name. See
+  [docs/gestures.md](docs/gestures.md#on-a-holographic-model).
 - **Hologram:** the figure on the stage is `~/.jarvis/avatar.png` (any PNG with a transparent
   background; it isn't in the repo). Without one, an orb stands in. It reacts to listening,
   thinking and speaking, and the words beside it light up to match.
@@ -199,7 +204,7 @@ and [docs/protocol.md](docs/protocol.md) for the WebSocket messages.
 
 ```
 backend/   main.py (server, /ws), core.py, dashboard.py, hud_bridge.py, terminal.py, brain/ (router, providers, budget), memory/ (store, embeddings), voice/ (loop, engines, audio), tools/ (registry, MCP server, tools), auth/google.py, tests/
-frontend/  Vite app: src/hud/ (scene, layout, frame, panels, hologram, globe, widgets, conversation, cursor, confirm, debug, settings), src/gestures/ (tracker, pose, recognizer, arbiter, controller), src/net/socket.js, tests/
+frontend/  Vite app: src/hud/ (scene, layout, frame, panels, hologram, model-view, holograms/, globe, widgets, conversation, cursor, confirm, debug, settings), src/gestures/ (tracker, pose, recognizer, arbiter, controller), src/net/socket.js, tests/
 scripts/   setup.sh, start.sh
 docs/      providers.md, gestures.md, protocol.md, google-setup.md
 ```

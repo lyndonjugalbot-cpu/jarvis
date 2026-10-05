@@ -43,6 +43,8 @@ class ScriptedProvider:
             return Reply(text="It's on screen.")
         if "limit" in turn.text:
             raise ProviderLimitError("limit", reset_at=4102444800)  # 2100-01-01
+        if "which part" in turn.text:
+            return Reply(text=f"screen: {turn.screen}")
         return Reply(text=f"echo: {turn.text}")
 
     async def close(self) -> None:
@@ -300,3 +302,89 @@ async def test_files_panels_are_checked():
     assert not result.is_error
     assert Bridge.sent[-1]["data"] == {"folder": "", "files": rows}
     assert (await reg.run("show_panel", {"title": "x", "type": "files", "data": ["no"]})).is_error
+
+
+async def test_models_are_found_and_shown(tmp_path):
+    from tools.hud import make_hud_tools
+    from tools.registry import ToolRegistry
+
+    class Bridge:
+        connected = True
+
+        def __init__(self):
+            self.sent = []
+
+        async def broadcast(self, kind, payload):
+            self.sent.append((kind, payload))
+
+    (tmp_path / "robot_arm.glb").write_bytes(b"glTF")
+    (tmp_path / "notes.txt").write_text("not a model")
+    bridge = Bridge()
+    reg = ToolRegistry(make_hud_tools(bridge, tmp_path))
+
+    assert not (await reg.run("show_model", {"name": "jet engine"})).is_error
+    assert bridge.sent[-1] == (
+        "show_model",
+        {"id": "jet-engine", "title": "Jet engine", "explode": 0},
+    )
+    await reg.run("show_model", {"name": "engine", "explode": 1})  # close enough, broken apart
+    assert bridge.sent[-1][1]["id"] == "jet-engine" and bridge.sent[-1][1]["explode"] == 1
+    await reg.run("show_model", {"name": "Robot arm"})
+    assert bridge.sent[-1][1] == {
+        "id": "file:robot_arm.glb",
+        "title": "robot arm",
+        "file": "robot_arm.glb",
+        "explode": 0,
+    }
+    missing = await reg.run("show_model", {"name": "notes"})
+    assert missing.is_error and "Quadcopter drone" in missing.text and "robot arm" in missing.text
+    assert not (await reg.run("close_model", {})).is_error
+    assert bridge.sent[-1] == ("close_model", {})
+
+    bridge.connected = False
+    result = await reg.run("show_model", {"name": "drone"})
+    assert not result.is_error and "no hud is connected" in result.text.lower()
+
+
+def test_hologram_files_are_served(client, tmp_path):
+    listed = client.get("/api/holograms").json()["models"]
+    assert [m["id"] for m in listed] == ["jet-engine", "drone", "arc-reactor"]
+    folder = tmp_path / "holograms"
+    folder.mkdir()
+    (folder / "robot.glb").write_bytes(b"glTF binary")
+    (folder / ".secret.glb").write_bytes(b"hidden")
+    (folder / "notes.txt").write_text("no")
+    (tmp_path / "outside.glb").write_bytes(b"outside")
+    assert {"id": "file:robot.glb", "title": "robot", "file": "robot.glb"} in client.get(
+        "/api/holograms"
+    ).json()["models"]
+    assert client.get("/api/holograms/robot.glb").content == b"glTF binary"
+    for bad in (".secret.glb", "notes.txt", "missing.glb", "..%2Foutside.glb", "%2E%2E"):
+        assert client.get(f"/api/holograms/{bad}").status_code == 404, bad
+
+
+def test_the_selected_part_reaches_the_brain(client):
+    ws, session = connect(client)
+    state = {"model": "Jet engine", "part": "High-pressure turbine", "explode": 1}
+    session.send_json({"type": "model_state", "payload": state, "id": "h2"})
+    session.send_json({"type": "user_text", "payload": {"text": "which part is this?"}, "id": "h3"})
+    replies = [
+        m["payload"]["text"]
+        for m in until_idle(session)
+        if m["type"] == "transcript" and m["payload"]["role"] == "jarvis"
+    ]
+    ws.__exit__(None, None, None)
+    assert replies == [
+        "screen: a holographic Jet engine model, broken apart into its parts; "
+        "the user has selected its part: High-pressure turbine."
+    ]
+
+
+def test_screen_context_is_part_of_the_prompt():
+    from brain.providers.base import compose
+
+    prompt = compose(Turn(id="t", text="what is it?", screen="a holographic drone model."))
+    assert prompt.endswith(
+        "On the HUD right now: a holographic drone model.\n\nNew message:\nwhat is it?"
+    )
+    assert compose(Turn(id="t", text="hi")) == "hi"

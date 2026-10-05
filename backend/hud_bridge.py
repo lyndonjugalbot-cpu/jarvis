@@ -24,6 +24,7 @@ class HudBridge:
         self._message_ids = itertools.count(1)
         self._tasks: set[asyncio.Task] = set()
         self.voice = None  # a VoiceLoop, once voice has started
+        self.screen = ""  # what the hologram stage shows, for requests like "what's this part?"
 
     @property
     def connected(self) -> bool:
@@ -34,6 +35,24 @@ class HudBridge:
 
     def remove(self, ws: Any) -> None:
         self._clients.discard(ws)
+
+    def note_model(self, payload: dict) -> None:
+        """Keep track of the HUD's holographic model: which one, whether it's broken apart, and
+        the part the user picked. Each request then tells the brain."""
+        model = str(payload.get("model") or "").strip()[:80]
+        part = str(payload.get("part") or "").strip()[:80]
+        try:
+            explode = float(payload.get("explode") or 0)
+        except (TypeError, ValueError):
+            explode = 0.0
+        if not model:
+            self.screen = ""
+            return
+        state = "broken apart into its parts" if explode >= 0.5 else "assembled"
+        self.screen = f"a holographic {model} model, {state}"
+        if part:
+            self.screen += f"; the user has selected its part: {part}"
+        self.screen += "."
 
     def spawn(self, coro: Any) -> asyncio.Task:
         task = asyncio.create_task(coro)
@@ -120,7 +139,7 @@ class HudAssistant:
             await bridge.broadcast("transcript", {"role": "user", "text": text})
             await bridge.broadcast("state", {"state": "thinking"})
             try:
-                reply = await self._core.brain.ask(text)
+                reply = await self._core.brain.ask(text, screen=bridge.screen)
                 reply_text = reply.text
                 await bridge.broadcast(
                     "transcript",

@@ -220,10 +220,12 @@ export function createHologram(view, layout, stageEl) {
     setLevel(value) {
       level = Math.max(level, value);
     },
-    // hidden: a maximized panel is in front
-    update(dt, { hidden = false } = {}) {
+    // hidden: a maximized panel is in front. figure: false while a model stands on the platform.
+    update(dt, { hidden = false, figure: showFigure = true } = {}) {
       place();
       if (hidden) root.visible = false;
+      figure.visible = showFigure;
+      brackets.visible = showFigure;
       const speed = SPEED[state];
       t += dt * speed;
       glow += (GLOW[state] + level * 0.4 - glow) * Math.min(1, dt * 6);
@@ -255,7 +257,7 @@ export function createHologram(view, layout, stageEl) {
       if (avatar) avatar.material.opacity = 0.88 + 0.12 * glow * (0.8 + 0.2 * Math.sin(t * 9));
       const sweep = (t * 0.25) % 1;
       scan.position.y = FLOOR + sweep * 0.86;
-      scan.material.opacity = 0.45 * Math.sin(sweep * Math.PI);
+      scan.material.opacity = showFigure ? 0.45 * Math.sin(sweep * Math.PI) : 0;
     },
   };
 }
