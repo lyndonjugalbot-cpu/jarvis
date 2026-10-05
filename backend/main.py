@@ -74,8 +74,20 @@ def create_app(
                 },
             )
 
+        async def budget_notice(spent: float, cap: float, **_):
+            used_up = spent >= cap
+            message = (
+                f"The paid Claude API has used its ${cap:.2f} for this month; off until next month."
+                if used_up
+                else f"The paid Claude API has used ${spent:.2f} of its ${cap:.2f} this month."
+            )
+            await bridge.broadcast("error", {"message": message})
+            await bridge.broadcast("provider", assistant.provider_status())
+
         events.subscribe("provider.active", provider_changed)
         events.subscribe("provider.limit", provider_changed)
+        events.subscribe("budget.warning", budget_notice)
+        events.subscribe("budget.exhausted", budget_notice)
         events.subscribe("google.lost", google_lost)
         app.state.assistant = assistant
         app.state.core = core

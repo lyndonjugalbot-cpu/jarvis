@@ -24,6 +24,42 @@ class ClaudePlanSettings:
 
 
 @dataclass(frozen=True)
+class CodexPlanSettings:
+    """ChatGPT plan provider: the official Codex CLI, `codex exec`, one process per turn."""
+
+    enabled: bool = True
+    command: str = "codex"
+    model: str = ""  # empty = Codex's default for your plan
+    web_search: bool = True
+    turn_timeout_s: float = 180.0
+    stall_timeout_s: float = 90.0
+
+
+@dataclass(frozen=True)
+class LocalSettings:
+    """Free local model through Ollama, with JARVIS's own tool loop."""
+
+    enabled: bool = True
+    host: str = "http://127.0.0.1:11434"
+    model: str = "qwen3:8b"
+    turn_timeout_s: float = 120.0
+
+
+@dataclass(frozen=True)
+class PaidApiSettings:
+    """The pay-per-token Claude API: last resort, capped every month."""
+
+    enabled: bool = True
+    model: str = "claude-opus-5-5"
+    effort: str = "low"
+    max_tokens: int = 4096
+    monthly_cap_usd: float = 10.0
+    fallback: str = "auto"  # auto | ask | off
+    input_usd_per_mtok: float = 4.0
+    output_usd_per_mtok: float = 20.0
+
+
+@dataclass(frozen=True)
 class Settings:
     host: str
     port: int
@@ -40,6 +76,10 @@ class Settings:
     google_client_file: Path = Path("~/.jarvis/google_client.json").expanduser()
     google_token_file: Path = Path("~/.jarvis/google_token.json").expanduser()
     hud_origins: tuple[str, ...] = ("http://127.0.0.1:5173", "http://localhost:5173")
+    codex_plan: CodexPlanSettings = CodexPlanSettings()
+    local: LocalSettings = LocalSettings()
+    paid_api: PaidApiSettings = PaidApiSettings()
+    anthropic_api_key: str = ""
 
     @property
     def run_dir(self) -> Path:
@@ -49,9 +89,24 @@ class Settings:
     def log_dir(self) -> Path:
         return self.data_dir / "logs"
 
+    @property
+    def db_path(self) -> Path:
+        return self.data_dir / "jarvis.db"
+
 
 def _path(value: str) -> Path:
     return Path(os.path.expanduser(value))
+
+
+def _section(cls, raw: dict):
+    """Build a settings dataclass from a TOML table, keeping defaults for missing keys."""
+    defaults = cls()
+    values = {}
+    for name in cls.__dataclass_fields__:
+        default = getattr(defaults, name)
+        value = raw.get(name, default)
+        values[name] = tuple(value) if isinstance(default, tuple) else type(default)(value)
+    return cls(**values)
 
 
 def load_settings(config_path: Path | None = None, env_path: Path | None = None) -> Settings:
@@ -95,4 +150,8 @@ def load_settings(config_path: Path | None = None, env_path: Path | None = None)
         ),
         google_client_file=_path(google.get("client_file", str(data_dir / "google_client.json"))),
         google_token_file=_path(google.get("token_file", str(data_dir / "google_token.json"))),
+        codex_plan=_section(CodexPlanSettings, providers.get("codex_plan", {})),
+        local=_section(LocalSettings, providers.get("local", {})),
+        paid_api=_section(PaidApiSettings, providers.get("paid_api", {})),
+        anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
     )

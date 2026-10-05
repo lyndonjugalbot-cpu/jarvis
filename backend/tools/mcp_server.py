@@ -49,7 +49,7 @@ def build_mcp_app(registry: ToolRegistry, token: str) -> Any:
         return types.ListToolsResult(
             tools=[
                 types.Tool(name=s.name, description=s.description, input_schema=s.input_schema)
-                for s in registry.specs()
+                for s in registry.specs(cli=True)
             ]
         )
 
@@ -72,7 +72,7 @@ class McpToolServer:
     def __init__(self, registry: ToolRegistry, token: str, host: str = "127.0.0.1") -> None:
         if not token:
             raise ValueError("the MCP tool server needs a token")
-        self._token = token
+        self.token = token
         self._server = _QuietServer(
             uvicorn.Config(build_mcp_app(registry, token), host=host, port=0, log_level="warning")
         )
@@ -98,7 +98,7 @@ class McpToolServer:
         return {
             "type": "http",
             "url": self.url,
-            "headers": {"Authorization": f"Bearer {self._token}"},
+            "headers": {"Authorization": f"Bearer {self.token}"},
         }
 
     def write_claude_config(self, path: Path) -> Path:

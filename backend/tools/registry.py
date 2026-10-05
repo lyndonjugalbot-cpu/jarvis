@@ -35,6 +35,7 @@ class ToolSpec:
     args_model: type[BaseModel]
     confirm: bool = False
     summary: Callable[[dict[str, Any]], str] | None = None
+    for_cli: bool = True  # False: the Claude/Codex CLIs have their own (e.g. web search)
 
     @property
     def input_schema(self) -> dict[str, Any]:
@@ -58,6 +59,7 @@ def tool(
     confirm: bool = False,
     summary: Callable[[dict[str, Any]], str] | None = None,
     name: str | None = None,
+    for_cli: bool = True,
 ) -> Callable[[Callable[..., Awaitable[Any]]], ToolSpec]:
     """Turn an async function into a ToolSpec.
 
@@ -74,6 +76,7 @@ def tool(
             args_model=_args_model(fn),
             confirm=confirm,
             summary=summary,
+            for_cli=for_cli,
         )
 
     return wrap
@@ -133,8 +136,9 @@ class ToolRegistry:
         self._turn = _Turn()
         self.active_calls = 0
 
-    def specs(self) -> list[ToolSpec]:
-        return list(self._specs.values())
+    def specs(self, *, cli: bool = False) -> list[ToolSpec]:
+        """All tools, or only those the CLI providers should see."""
+        return [s for s in self._specs.values() if s.for_cli or not cli]
 
     def begin_turn(self, turn_id: str) -> None:
         """Start remembering results for a new turn. The same id keeps the existing memory."""

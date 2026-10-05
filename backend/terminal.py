@@ -97,6 +97,18 @@ async def run_chat(settings: Settings) -> None:
         "provider.active",
         lambda label, previous, **_: previous and print(f"  {yellow('>')} switching to {label}"),
     )
+    events.subscribe(
+        "budget.warning",
+        lambda spent, cap, **_: print(
+            f"  {yellow('!')} paid API: ${spent:.2f} of ${cap:.2f} used this month"
+        ),
+    )
+    events.subscribe(
+        "budget.exhausted",
+        lambda spent, cap, **_: print(
+            f"  {yellow('!')} paid API: monthly ${cap:.2f} used up; off until next month"
+        ),
+    )
 
     core = await start_core(settings, confirmer=make_confirmer(lines), events=events)
     try:
@@ -116,12 +128,8 @@ async def run_chat(settings: Settings) -> None:
                 when = f" The next one is back {_clock(e.next_reset)}." if e.next_reset else ""
                 print(f"{cyan('jarvis')} > I can't answer right now: {e}.{when}")
                 continue
-            meta = [
-                reply.provider,
-                f"{reply.duration_s:.1f}s",
-                *reply.tools_used,
-                f"${reply.cost_usd:.2f} API spend",
-            ]
+            spend = f"${reply.cost_usd:.4f} API spend" if reply.cost_usd else "$0.00 API spend"
+            meta = [reply.provider, f"{reply.duration_s:.1f}s", *reply.tools_used, spend]
             print(f"{cyan('jarvis')} > {reply.text}")
             print("  " + dim(" | ".join(meta)))
     finally:

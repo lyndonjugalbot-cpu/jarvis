@@ -94,6 +94,7 @@ class HudAssistant:
             "paid": bool(getattr(providers.get(active), "paid", False)),
             "coolingDown": sorted(status["coolingDown"]),
             "order": [p.label for p in self._core.providers],
+            "budget": self._core.budget.summary() if getattr(self._core, "budget", None) else None,
         }
 
     async def handle_text(self, text: str) -> None:
@@ -114,6 +115,7 @@ class HudAssistant:
                         "provider": reply.provider,
                         "tools": reply.tools_used,
                         "seconds": round(reply.duration_s, 1),
+                        "cost": round(reply.cost_usd, 4),
                     },
                 )
             except NoProviderAvailable as e:

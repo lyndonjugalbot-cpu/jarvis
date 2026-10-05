@@ -15,9 +15,9 @@ location = ""   # home for the weather; empty = the city in this computer's time
 history_turns = 20   # recent turns JARVIS keeps so it can switch providers without losing context
 
 [providers]
-# Tried in order; the first available provider answers. Later phases add
-# "codex_plan" (ChatGPT plan), "local" (Ollama) and "paid_api" (capped Claude API).
-order = ["claude_plan"]
+# Tried in order; the first available provider answers. Plans you already pay for come first,
+# then the free local model, then the capped pay-per-token API.
+order = ["claude_plan", "codex_plan", "local", "paid_api"]
 
 [providers.claude_plan]
 enabled = true
@@ -27,6 +27,29 @@ effort = ""                   # empty = default; "low" answers faster, "high" th
 builtin_tools = ["WebSearch", "WebFetch"]
 turn_timeout_s = 120
 stall_timeout_s = 45          # no output for this long (outside JARVIS tool calls) counts as a failure
+
+[providers.codex_plan]
+enabled = true
+command = "codex"
+model = ""                    # empty = Codex's default model for your ChatGPT plan
+web_search = true
+turn_timeout_s = 180
+stall_timeout_s = 90
+
+[providers.local]
+enabled = true
+host = "http://127.0.0.1:11434"
+model = "qwen3:8b"            # free and private; needs `ollama pull qwen3:8b` (~5 GB)
+
+[providers.paid_api]
+enabled = true                # also needs ANTHROPIC_API_KEY in .env
+model = "claude-opus-5-5"
+effort = "low"                # low answers fastest and cheapest; medium/high think harder
+max_tokens = 4096
+monthly_cap_usd = 10          # set the same limit in the Anthropic Console as a backstop
+fallback = "auto"             # auto: use when everything else is out | ask: ask once a day | off
+input_usd_per_mtok = 4.0      # current price of the model above, to track spend against the cap
+output_usd_per_mtok = 20.0
 
 [tools]
 confirm_timeout_s = 30        # no answer to a confirmation counts as "no"

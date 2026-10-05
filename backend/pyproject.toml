@@ -13,6 +13,8 @@ dependencies = [
     "psutil>=7.2.2",
     "google-auth>=2.59.1",
     "google-auth-oauthlib>=1.5.0",
+    "anthropic>=1.11.0",
+    "ddgs>=9.16.0",
 ]
 
 [dependency-groups]

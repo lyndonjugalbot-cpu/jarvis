@@ -22,6 +22,25 @@ from events import EventBus
 log = logging.getLogger(__name__)
 
 
+class SimulatedLimit:
+    """Wraps a provider so it always reports its limit: for trying the fallback chain on purpose
+    (JARVIS_SIMULATE_LIMIT=claude_plan,codex_plan) without using up a real plan."""
+
+    def __init__(self, provider: Provider) -> None:
+        self._provider = provider
+        self.name = provider.name
+        self.label = provider.label
+
+    async def available(self) -> bool:
+        return True
+
+    async def send(self, turn: Turn) -> Reply:
+        raise ProviderLimitError(f"{self.label}: simulated limit")
+
+    async def close(self) -> None:
+        await self._provider.close()
+
+
 class NoProviderAvailable(Exception):
     def __init__(self, failures: list[str], next_reset: float | None) -> None:
         super().__init__("; ".join(failures) or "no providers configured")

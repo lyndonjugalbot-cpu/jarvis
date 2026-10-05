@@ -93,14 +93,17 @@ function setOrb(state) {
 }
 
 socket.on("state", ({ state }) => setOrb(state));
-socket.on("transcript", ({ role, text, provider, tools, seconds }) => {
-  const meta = role === "jarvis" && provider ? [provider, `${seconds}s`, ...(tools ?? [])].join(" | ") : "";
+socket.on("transcript", ({ role, text, provider, tools, seconds, cost }) => {
+  const parts = role === "jarvis" && provider ? [provider, `${seconds}s`, ...(tools ?? [])] : [];
+  if (cost) parts.push(`$${cost.toFixed(4)}`);
+  const meta = parts.join(" | ");
   transcript.add(role, text, meta);
 });
 socket.on("error", ({ message }) => say(message));
-socket.on("provider", ({ label, paid, coolingDown, order }) => {
+socket.on("provider", ({ label, paid, coolingDown, order, budget }) => {
   const name = label || order?.[0] || "no provider";
-  setIndicator("brain", paid ? "paid" : label ? "online" : "idle", paid ? `${name} | PAID` : name);
+  const spend = budget ? ` $${budget.spent_usd.toFixed(2)}/$${budget.cap_usd}` : "";
+  setIndicator("brain", paid ? "paid" : label ? "online" : "idle", paid ? `${name} | PAID${spend}` : name);
   document.querySelector('[data-indicator="brain"]').title = coolingDown?.length
     ? `Cooling down: ${coolingDown.join(", ")}`
     : "";

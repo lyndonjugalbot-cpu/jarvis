@@ -20,6 +20,20 @@ class Reply:
     cost_usd: float = 0.0  # real money spent; only the paid tier sets this
 
 
+HISTORY_CHARS = 6000
+
+
+def with_history(turn: Turn, max_chars: int = HISTORY_CHARS) -> str:
+    """The request with the recent conversation in front, for a model starting fresh."""
+    if not turn.history:
+        return turn.text
+    context = "\n".join(f"{role}: {text}" for role, text in turn.history)[-max_chars:]
+    return (
+        "Earlier in this conversation (context only; it already happened):\n"
+        f"{context}\n\nNew message:\n{turn.text}"
+    )
+
+
 class ProviderError(Exception):
     """The provider failed this turn; trying again may work."""
 

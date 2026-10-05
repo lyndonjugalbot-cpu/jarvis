@@ -15,8 +15,9 @@ come next, and a pay-per-use API is only the last resort, with a monthly cap.
 | 2. HUD + gestures | Done: Three.js panels with bloom, webcam hand tracking, gestures with the 7.1 rules, demo, recorder |
 | 3. Connect | Done: WebSocket link (Origin check, first-message token), typing in the HUD, panels from the core, approve/cancel prompt, orb states, provider badge |
 | 4. Real tools | Done: weather, files, system, Calendar and Gmail (after the one-time [Google setup](docs/google-setup.md)), reconnect flow |
-| 5. Fallback chain | Next |
-| 6-8 | Not started |
+| 5. Fallback chain | Done: ChatGPT plan (Codex), local Ollama model, capped paid Claude API, failover |
+| 6. Memory | Next |
+| 7-8 | Not started |
 
 ## Requirements
 
@@ -48,16 +49,21 @@ scripts/start.sh test   # backend and gesture tests
 In the chat, `/status` shows the active provider and how much of your plan's usage windows
 are used. Saving a note asks for a typed `y` first, standing in for the HUD's thumbs-up.
 
-## How the brain stays on your subscription
+## How the brain stays on your subscriptions
 
-- The core runs the official `claude` CLI headless (`claude -p`), signed in to your plan. It
-  removes `ANTHROPIC_*` variables from the CLI's environment and refuses any CLI session that
-  reports an API key, so this path can't bill the API.
-- JARVIS's own tools are served over MCP on `127.0.0.1` with a fresh token each run. The CLI
-  gets only those tools plus web search and web fetch: no shell, no file edits.
-- When a plan's limit is reached, the router waits for the reset time the CLI reports and
-  moves to the next provider. Phase 5 adds the ChatGPT plan, a local model and the capped
-  paid API.
+JARVIS tries providers in order: your **Claude plan** (`claude -p`), your **ChatGPT plan**
+(`codex exec`), a free **local model** (Ollama), and last the **paid Claude API**, capped at
+$10 a month by default.
+
+- When a plan reaches its limit, JARVIS waits for the reset time that plan reports and uses the
+  next provider meanwhile.
+- The plan CLIs never see an API key, and JARVIS refuses either CLI if it's signed in with one,
+  so they can't bill per token.
+- The CLIs only get JARVIS's tools (over MCP on `127.0.0.1`, with a fresh token each run) plus
+  their own web search: no shell, no file edits.
+
+Details, setup for the local model and the paid key, and how to simulate limits are in
+[docs/providers.md](docs/providers.md).
 
 Settings are in `backend/config.toml`. Logs and notes are in `~/.jarvis/`.
 
@@ -71,6 +77,7 @@ Settings are in `backend/config.toml`. Logs and notes are in `~/.jarvis/`.
 | Notes | `write_note`, `list_notes`, `read_note` | Writing |
 | Files | `search_files` (Spotlight), `read_file` (text only), limited to `[tools] file_roots` | No |
 | This computer | `system_stats`, `open_app`, `open_url` (http/https only) | No |
+| Web | `web_search` (DuckDuckGo; for the local model and paid API; the plan CLIs use their own) | No |
 | Screen | `show_panel`, `close_panel` | No |
 | Google account | `connect_google` | No |
 
@@ -106,5 +113,5 @@ and [docs/protocol.md](docs/protocol.md) for the WebSocket messages.
 backend/   main.py (server, /ws), core.py, hud_bridge.py, terminal.py, brain/ (router, providers), tools/ (registry, MCP server, tools), auth/google.py, tests/
 frontend/  Vite app: src/hud/ (scene, panels, cursor, transcript, confirm, debug, settings), src/gestures/ (tracker, pose, recognizer, arbiter, controller), src/net/socket.js, tests/
 scripts/   setup.sh, start.sh
-docs/      gestures.md, protocol.md, google-setup.md
+docs/      providers.md, gestures.md, protocol.md, google-setup.md
 ```

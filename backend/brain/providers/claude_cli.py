@@ -21,6 +21,7 @@ from brain.providers.base import (
     ProviderUnavailable,
     Reply,
     Turn,
+    with_history,
 )
 from config import ClaudePlanSettings
 
@@ -29,7 +30,6 @@ log = logging.getLogger(__name__)
 MCP_PREFIX = "mcp__jarvis__"
 AUTH_CACHE_S = 600
 STREAM_LIMIT = 16 * 1024 * 1024
-HISTORY_CHARS = 6000
 
 _LIMIT_TEXT = re.compile(r"usage limit|hit your limit|limit reached|rate.?limit|out of usage", re.I)
 _AUTH_TEXT = re.compile(r"not logged in|/login|invalid api key|authenticat|oauth", re.I)
@@ -169,14 +169,8 @@ class ClaudeCliProvider:
 
     # ------------------------------------------------------------ turns
     def _compose(self, turn: Turn) -> str:
-        if self._turns_in_process or not turn.history:
-            return turn.text
-        lines = [f"{role}: {text}" for role, text in turn.history]
-        context = "\n".join(lines)[-HISTORY_CHARS:]
-        return (
-            "Earlier in this conversation (context only; it already happened):\n"
-            f"{context}\n\nNew message:\n{turn.text}"
-        )
+        # A warm process remembers the conversation; a fresh one gets it in the first message.
+        return turn.text if self._turns_in_process else with_history(turn)
 
     async def send(self, turn: Turn) -> Reply:
         async with self._lock:
