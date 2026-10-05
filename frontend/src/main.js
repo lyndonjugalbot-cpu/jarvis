@@ -6,15 +6,19 @@ import { createController } from "./gestures/controller.js";
 import { buildDemo } from "./gestures/demo.js";
 import { createGestureEngine } from "./gestures/engine.js";
 import { startTracker } from "./gestures/tracker.js";
+import { createConfirm } from "./hud/confirm.js";
 import { createCursor } from "./hud/cursor.js";
 import { createDebug } from "./hud/debug.js";
 import { PanelManager } from "./hud/panels.js";
 import { createScene } from "./hud/scene.js";
 import { createSettingsDrawer, loadSettings } from "./hud/settings-drawer.js";
 import { setIndicator, startClock } from "./hud/statusbar.js";
+import { createTranscript } from "./hud/transcript.js";
+import { createSocket } from "./net/socket.js";
 
-const HEALTH_EVERY_MS = 5000;
 const $ = (id) => document.getElementById(id);
+// Gestures worth telling the core about (for context and the log).
+const REPORTED_GESTURES = new Set(["tap", "minimize", "maximize", "restore", "swipe", "confirm", "cancel"]);
 
 const STARTER_PANELS = [
   {
@@ -24,7 +28,7 @@ const STARTER_PANELS = [
     data:
       "Hold up an open palm for half a second to arm gestures. Point to aim, pinch to tap or grab, " +
       "make a fist to minimize, and spread two pinched hands to maximize.",
-    position: { x: -2.1, y: 0.55, z: 0 },
+    position: { x: -3.8, y: 0.9, z: 0 },
   },
   {
     id: "gestures",
@@ -39,13 +43,9 @@ const STARTER_PANELS = [
       "Swipe down: close",
       "Thumbs up / down: confirm / cancel",
     ],
-    position: { x: 2.1, y: 0.55, z: 0 },
+    position: { x: 3.8, y: 0.9, z: 0 },
   },
 ];
-
-function say(text) {
-  $("say").textContent = text;
-}
 
 // ---------------------------------------------------------------- HUD
 const settings = loadSettings();
@@ -54,9 +54,80 @@ const panels = new PanelManager(view, $("dock"));
 for (const spec of STARTER_PANELS) panels.add(spec);
 panels.focus(panels.panels[0]);
 
+// ---------------------------------------------------------------- link to the core
+const token = import.meta.env.VITE_JARVIS_TOKEN ?? "";
+const socket = createSocket({
+  url: `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/ws`,
+  token,
+  onStatus(status) {
+    const text = { online: "online", connecting: "connecting", offline: "offline" }[status];
+    if (status === "online") setIndicator("core", "online");
+    else if (status === "connecting") setIndicator("core", "idle", text);
+    else setIndicator("core", "offline", text ?? (status === "unauthorized" ? "token mismatch" : "refused"));
+    if (status === "unauthorized") {
+      say(token ? "The core rejected the HUD token. Re-run scripts/setup.sh and restart both." : "No HUD token: run scripts/setup.sh.");
+    }
+  },
+});
+const transcript = createTranscript($("transcript"), {
+  onSubmit(text) {
+    if (socket.send("user_text", { text })) return true;
+    say("Not connected to the core yet. Start it with scripts/start.sh core.");
+    return false;
+  },
+});
+const confirmPrompt = createConfirm($("confirm"), {
+  onAnswer(actionId, approved) {
+    socket.send("confirm", { actionId, approved });
+  },
+});
+
+function say(text) {
+  transcript.status(text);
+}
+
+function setOrb(state) {
+  const orb = document.querySelector(".orb");
+  orb.dataset.state = state;
+  orb.setAttribute("aria-label", `JARVIS is ${state}`);
+}
+
+socket.on("state", ({ state }) => setOrb(state));
+socket.on("transcript", ({ role, text, provider, tools, seconds }) => {
+  const meta = role === "jarvis" && provider ? [provider, `${seconds}s`, ...(tools ?? [])].join(" | ") : "";
+  transcript.add(role, text, meta);
+});
+socket.on("error", ({ message }) => say(message));
+socket.on("provider", ({ label, paid, coolingDown, order }) => {
+  const name = label || order?.[0] || "no provider";
+  setIndicator("brain", paid ? "paid" : label ? "online" : "idle", paid ? `${name} | PAID` : name);
+  document.querySelector('[data-indicator="brain"]').title = coolingDown?.length
+    ? `Cooling down: ${coolingDown.join(", ")}`
+    : "";
+});
+socket.on("show_panel", ({ panel }) => panels.show(panel));
+socket.on("update_panel", ({ panelId, data }) => {
+  const panel = panels.find(panelId);
+  if (panel) panels.show({ id: panelId, data });
+});
+socket.on("close_panel", ({ panelId }) => panels.close(panels.find(panelId)));
+socket.on("confirm_request", (request) => {
+  confirmPrompt.show(request);
+  say("Approve with a thumbs up (or Y), cancel with a thumbs down (or N).");
+});
+socket.on("confirm_done", ({ actionId }) => confirmPrompt.done(actionId));
+
+// ---------------------------------------------------------------- gestures
 const cursor = createCursor($("cursor"));
 const engine = createGestureEngine(settings);
-const controller = createController({ panels, cursor, settings, say, setIndicator });
+const controller = createController({
+  panels,
+  cursor,
+  settings,
+  say,
+  setIndicator,
+  onConfirm: (approved) => confirmPrompt.answer(approved),
+});
 const debug = createDebug($("debug"), $("camera"));
 const drawer = createSettingsDrawer($("settings"), settings);
 startClock($("clock"));
@@ -72,6 +143,11 @@ function feed(frame, from) {
   const events = engine.update(frame);
   controller.handle(events);
   debug.show(frame, engine.hands, events, { fps, armed: engine.armed, source: from });
+  for (const e of events) {
+    if (!REPORTED_GESTURES.has(e.type)) continue;
+    const gesture = e.type === "swipe" ? `swipe_${e.direction}` : e.type;
+    socket.send("gesture_event", { gesture, panelId: panels.focused?.id ?? null });
+  }
 }
 
 // ---------------------------------------------------------------- camera
@@ -192,6 +268,8 @@ canvas.addEventListener("dblclick", (e) => {
 
 let panelCount = 0;
 const KEYS = {
+  "/": () => transcript.focus(),
+  y: () => confirmPrompt.answer(true),
   c: toggleCamera,
   p: playDemo,
   d: () => debug.toggle(),
@@ -199,6 +277,7 @@ const KEYS = {
   r: toggleRecording,
   "?": () => ($("help").hidden = !$("help").hidden),
   n: () => {
+    if (confirmPrompt.answer(false)) return;
     panelCount += 1;
     panels.add({
       id: `note-${panelCount}`,
@@ -220,22 +299,12 @@ const KEYS = {
 };
 window.addEventListener("keydown", (e) => {
   if (e.target.closest?.("input, textarea") || e.metaKey || e.ctrlKey || e.altKey) return;
-  KEYS[e.key.toLowerCase()]?.();
+  const action = KEYS[e.key.toLowerCase()];
+  if (!action) return;
+  e.preventDefault(); // so "/" doesn't land in the text box it focuses
+  action();
 });
 $("camera-toggle").addEventListener("click", toggleCamera);
-
-// ---------------------------------------------------------------- core health
-async function checkCore() {
-  try {
-    const res = await fetch("/api/health", { cache: "no-store" });
-    const body = res.ok ? await res.json() : null;
-    setIndicator("core", body?.status === "ok" ? "online" : "offline");
-  } catch {
-    setIndicator("core", "offline");
-  }
-}
-checkCore();
-setInterval(checkCore, HEALTH_EVERY_MS);
 
 // ---------------------------------------------------------------- render loop
 let last = performance.now();

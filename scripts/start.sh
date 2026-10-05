@@ -7,8 +7,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-STATE="${JARVIS_HOME:-$HOME/.jarvis}"
-PY="$STATE/venv/bin/python"
+# The Python env stays in ~/.jarvis/venv even when JARVIS_HOME points the data somewhere else.
+PY="${JARVIS_VENV:-$HOME/.jarvis/venv}/bin/python"
 [ -x "$PY" ] || { echo "Run scripts/setup.sh first." >&2; exit 1; }
 
 case "${1:-}" in

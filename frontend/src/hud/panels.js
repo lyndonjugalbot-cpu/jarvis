@@ -2,6 +2,8 @@
 
 import { Panel } from "./panel.js";
 
+export const SLOTS = [[-3.8, 0.9], [0, 0.9], [3.8, 0.9], [-3.8, -1.6], [3.8, -1.6]];
+
 function createDock(el) {
   return {
     add(panel, onRestore) {
@@ -53,6 +55,30 @@ export class PanelManager {
     this.panels.push(panel);
     this.focus(panel);
     return panel;
+  }
+
+  // Open a panel from the core, or update it if it is already here.
+  show(spec) {
+    const existing = this.find(spec.id);
+    if (!existing) return this.add({ ...spec, position: this.freeSpot() });
+    existing.setContent(spec.title ?? existing.title, spec.data ?? existing.data, spec.type ?? existing.type);
+    if (existing.state === "minimized") this.unminimize(existing);
+    else this.focus(existing);
+    return existing;
+  }
+
+  // A resting place that doesn't overlap the panels already showing: the top row first, then
+  // the sides of the lower row (its middle belongs to the orb).
+  freeSpot(size = { w: 3.4, h: 2.2 }) {
+    const overlaps = ([x, y]) =>
+      this.visible().some(
+        (p) =>
+          Math.abs(p.home.x - x) < (p.size.w + size.w) / 2 + 0.2 &&
+          Math.abs(p.home.y - y) < (p.size.h + size.h) / 2 + 0.2,
+      );
+    const free = SLOTS.find((slot) => !overlaps(slot));
+    const [x, y] = free ?? [(Math.random() - 0.5) * 4, (Math.random() - 0.5) * 2];
+    return { x, y, z: free ? 0 : 0.6 };
   }
 
   find(id) {

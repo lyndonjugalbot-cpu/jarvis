@@ -46,11 +46,25 @@
 
     <nav id="dock" class="dock" aria-label="Minimized panels"></nav>
 
-    <footer class="transcript">
-      <p class="line system" id="say">
+    <footer class="transcript" id="transcript">
+      <div class="lines" aria-live="polite"></div>
+      <p class="status">
         Press <kbd>C</kbd> to start the camera, or <kbd>P</kbd> for a gesture demo. <kbd>?</kbd> lists every key.
       </p>
+      <form class="ask">
+        <input type="text" name="text" maxlength="4000" autocomplete="off" placeholder="Ask JARVIS... ( / to type )" aria-label="Ask JARVIS" />
+      </form>
     </footer>
+
+    <section class="confirm" id="confirm" role="alertdialog" aria-labelledby="confirm-summary" hidden>
+      <p class="confirm-label">JARVIS wants to</p>
+      <p class="confirm-summary" id="confirm-summary"></p>
+      <div class="confirm-actions">
+        <button class="hud-button approve" type="button">Approve <small>thumbs up / Y</small></button>
+        <button class="hud-button cancel" type="button">Cancel <small>thumbs down / N</small></button>
+      </div>
+      <div class="confirm-timer"><span></span></div>
+    </section>
 
     <div class="cursor" id="cursor" hidden>
       <svg viewBox="0 0 52 52" aria-hidden="true">
@@ -77,6 +91,8 @@
     <aside class="drawer help" id="help" hidden>
       <h2>Keys</h2>
       <dl>
+        <dt>/</dt><dd>Type to JARVIS</dd>
+        <dt>Y / N</dt><dd>Approve / cancel a pending action</dd>
         <dt>C</dt><dd>Camera on/off</dd>
         <dt>P</dt><dd>Play the gesture demo</dd>
         <dt>D</dt><dd>Debug view: tracked hands, poses, events</dd>

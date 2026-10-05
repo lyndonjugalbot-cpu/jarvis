@@ -13,8 +13,9 @@ come next, and a pay-per-use API is only the last resort, with a monthly cap.
 | 0. Setup | Done: core and HUD each start with one command |
 | 1. Brain | Done: terminal chat on the Claude plan, tool registry, MCP tool server, time, web search, notes |
 | 2. HUD + gestures | Done: Three.js panels with bloom, webcam hand tracking, gestures with the 7.1 rules, demo, recorder |
-| 3. Connect | Next |
-| 4-8 | Not started |
+| 3. Connect | Done: WebSocket link (Origin check, first-message token), typing in the HUD, panels from the core, approve/cancel prompt, orb states, provider badge |
+| 4. Real tools | Next |
+| 5-8 | Not started |
 
 ## Requirements
 
@@ -60,8 +61,17 @@ Settings are in `backend/config.toml`. Logs and notes are in `~/.jarvis/`.
 
 ## The HUD
 
-Open http://127.0.0.1:5173 after `scripts/start.sh hud`.
+Start the core and the HUD in two terminals, then open http://127.0.0.1:5173:
 
+```sh
+scripts/start.sh core
+scripts/start.sh hud
+```
+
+- Press **/** to type to JARVIS. Answers worth reading open as panels.
+- When JARVIS wants to do something risky, like saving a note, a prompt asks first. Approve with
+  a thumbs up, a click or **Y**; cancel with a thumbs down or **N**. 30 seconds of silence counts
+  as no.
 - Press **C** to start the camera, then hold up an open palm for half a second to arm gestures.
 - Press **P** to watch a scripted gesture demo.
 - Press **?** for every key.
@@ -69,13 +79,14 @@ Open http://127.0.0.1:5173 after `scripts/start.sh hud`.
 
 Hand tracking runs in the browser with MediaPipe; video never leaves the machine. The first
 `npm run dev` downloads the hand model (~8 MB) into `frontend/public/models/`. See
-[docs/gestures.md](docs/gestures.md) for the gesture rules, tuning and recording sessions for tests.
+[docs/gestures.md](docs/gestures.md) for the gesture rules, tuning and recording sessions for tests,
+and [docs/protocol.md](docs/protocol.md) for the WebSocket messages.
 
 ## Layout
 
 ```
-backend/   main.py, core.py, terminal.py, brain/ (router, providers), tools/ (registry, MCP server, tools), tests/
-frontend/  Vite app: src/hud/ (scene, panels, cursor, debug, settings), src/gestures/ (tracker, pose, recognizer, arbiter, controller), tests/
+backend/   main.py (server, /ws), core.py, hud_bridge.py, terminal.py, brain/ (router, providers), tools/ (registry, MCP server, tools), tests/
+frontend/  Vite app: src/hud/ (scene, panels, cursor, transcript, confirm, debug, settings), src/gestures/ (tracker, pose, recognizer, arbiter, controller), src/net/socket.js, tests/
 scripts/   setup.sh, start.sh
-docs/      gestures.md
+docs/      gestures.md, protocol.md
 ```

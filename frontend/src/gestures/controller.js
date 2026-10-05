@@ -2,7 +2,7 @@
 // dragging, resizing, the dock. Hand coordinates come from the camera; only the central
 // `activeArea` of the view maps to the screen, so the edges are reachable without stretching.
 
-export function createController({ panels, cursor, settings, say, setIndicator }) {
+export function createController({ panels, cursor, settings, say, setIndicator, onConfirm }) {
   let last = null;
   let grabbed = null;
   let resizing = null;
@@ -105,12 +105,12 @@ export function createController({ panels, cursor, settings, say, setIndicator }
       const panel = panels.cycleFocus(e.direction === "right" ? 1 : -1);
       if (panel) say(`Focused ${panel.title}.`);
     },
-    // Phase 3 sends these to the core to answer a confirm_request.
+    // Thumbs up / down answer a pending confirm_request from the core.
     confirm() {
-      say("Thumbs up: nothing is waiting for confirmation yet.");
+      if (!onConfirm?.(true)) say("Thumbs up: nothing is waiting for approval.");
     },
     cancel() {
-      say("Thumbs down: nothing to cancel.");
+      if (!onConfirm?.(false)) say("Thumbs down: nothing to cancel.");
     },
   };
 

@@ -63,6 +63,7 @@ body {
 
 .panel-content p {
   margin: 0;
+  white-space: pre-line;
 }
 
 .panel-content ul {
@@ -220,13 +221,13 @@ body {
   inset: 0;
   display: grid;
   place-items: end center;
-  padding-bottom: 18vh;
+  padding-bottom: 215px; /* clear of the transcript strip */
 }
 
 .orb {
   position: relative;
-  width: 180px;
-  height: 180px;
+  width: 140px;
+  height: 140px;
   display: grid;
   place-items: center;
 }
@@ -248,20 +249,52 @@ body {
 }
 
 .r2 {
-  inset: 22px;
+  inset: 17px;
   animation-delay: 0.25s;
 }
 
 .r3 {
-  inset: 44px;
+  inset: 34px;
   animation-delay: 0.5s;
 }
 
 .core {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   background: var(--cyan);
   box-shadow: 0 0 24px var(--cyan), 0 0 60px rgba(34, 211, 238, 0.5);
+}
+
+/* Orb states from the core: thinking spins, speaking beats, listening brightens */
+.orb[data-state="thinking"] .r1 {
+  border-style: dashed;
+  animation: spin 2.4s linear infinite;
+}
+
+.orb[data-state="thinking"] .r2,
+.orb[data-state="thinking"] .r3 {
+  animation-duration: 0.9s;
+}
+
+.orb[data-state="speaking"] .core {
+  animation: beat 0.5s ease-in-out infinite alternate;
+}
+
+.orb[data-state="listening"] .ring {
+  border-color: var(--accent);
+  animation-duration: 1.4s;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes beat {
+  to {
+    transform: scale(1.25);
+  }
 }
 
 @keyframes pulse {
@@ -291,12 +324,124 @@ body {
   text-align: center;
 }
 
+.transcript .lines {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+}
+
 .transcript .line {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
   margin: 0;
 }
 
-.transcript .system {
+.transcript .who {
+  flex: none;
+  width: 56px;
   color: var(--muted);
+  font: 11px var(--font-display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.transcript .jarvis .who {
+  color: var(--cyan);
+}
+
+.transcript .error .who {
+  color: var(--danger);
+}
+
+.transcript .line small {
+  margin-left: auto;
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.transcript .status {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.ask input {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: rgba(5, 8, 15, 0.6);
+  color: var(--text);
+  font: 14px var(--font-body);
+  outline: none;
+}
+
+.ask input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.35);
+}
+
+/* Confirmation prompt for risky actions */
+.confirm {
+  z-index: 25;
+  position: fixed;
+  top: 84px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, calc(100vw - 48px));
+  padding: 16px 20px 12px;
+  border: 1px solid var(--warning);
+  background: rgba(5, 8, 15, 0.92);
+  box-shadow: 0 0 24px rgba(245, 158, 11, 0.25);
+}
+
+.confirm-label {
+  margin: 0;
+  color: var(--warning);
+  font: 11px var(--font-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.confirm-summary {
+  margin: 6px 0 14px;
+  font-size: 16px;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.confirm-actions .hud-button {
+  margin-left: 0;
+}
+
+.confirm-actions small {
+  margin-left: 6px;
+  color: var(--muted);
+  font: 10px var(--font-body);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.confirm .approve {
+  border-color: var(--cyan);
+}
+
+.confirm-timer {
+  height: 2px;
+  margin-top: 12px;
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.confirm-timer span {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--warning);
 }
 
 kbd {
@@ -475,7 +620,8 @@ kbd {
 
 @media (prefers-reduced-motion: reduce) {
   .grid,
-  .ring {
-    animation: none;
+  .ring,
+  .orb .core {
+    animation: none !important;
   }
 }

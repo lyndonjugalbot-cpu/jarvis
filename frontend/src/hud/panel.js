@@ -57,9 +57,10 @@ export class Panel {
     this.drawFrame();
   }
 
-  setContent(title, data) {
+  setContent(title, data, type = this.type) {
     this.title = title;
     this.data = data;
+    this.type = type;
     const heading = document.createElement("h3");
     heading.textContent = title;
     let body;

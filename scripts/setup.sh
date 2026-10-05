@@ -3,15 +3,14 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-STATE="${JARVIS_HOME:-$HOME/.jarvis}"
 # Documents syncs to iCloud, which makes big dependency folders slow. The Python env lives in
-# $STATE, and node_modules is marked so iCloud skips it.
-export UV_PROJECT_ENVIRONMENT="$STATE/venv"
+# ~/.jarvis/venv, and node_modules is marked so iCloud skips it.
+export UV_PROJECT_ENVIRONMENT="${JARVIS_VENV:-$HOME/.jarvis/venv}"
 
 need() { command -v "$1" >/dev/null || { echo "Missing $1. Install it with: $2" >&2; exit 1; }; }
 need uv "brew install uv"
 need npm "brew install node"
-mkdir -p "$STATE"
+mkdir -p "$(dirname "$UV_PROJECT_ENVIRONMENT")"
 
 echo "==> Python packages ($UV_PROJECT_ENVIRONMENT)"
 (cd "$ROOT/backend" && uv sync)

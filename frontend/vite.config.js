@@ -8,7 +8,10 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 5173,
     strictPort: true, // the core's Origin check (Phase 3) expects this exact port
-    proxy: { "/api": core },
+    proxy: {
+      "/api": core,
+      "/ws": { target: core.replace(/^http/, "ws"), ws: true },
+    },
   },
   preview: { host: "127.0.0.1", port: 4173, strictPort: true },
   // Served locally, so one ~750 kB bundle (Three.js + MediaPipe) is fine.

@@ -1,20 +1,37 @@
 """JARVIS core entry point.
 
-python main.py serve   # HUD backend on 127.0.0.1 (WebSocket arrives in Phase 3)
-python main.py chat    # Phase 1 terminal chat
+python main.py serve   # core for the HUD: WebSocket /ws on 127.0.0.1
+python main.py chat    # terminal chat
 """
 
 import argparse
 import asyncio
+import hmac
+import json
 import logging
+import secrets
+from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
 
-from config import Settings, load_settings
+from config import BACKEND_DIR, Settings, load_settings
+from core import start_core
+from events import EventBus
+from hud_bridge import HudAssistant, HudBridge
 
 VERSION = "0.1.0"
+AUTH_TIMEOUT_S = 2.0
+MAX_TEXT = 4000
+HUD_DIST = BACKEND_DIR.parent / "frontend" / "dist"
+
+# WebSocket close codes
+UNAUTHORIZED = 4401
+FORBIDDEN_ORIGIN = 4403
+
+log = logging.getLogger("jarvis")
 
 
 def setup_logging(settings: Settings, *, console: bool) -> None:
@@ -31,12 +48,98 @@ def setup_logging(settings: Settings, *, console: bool) -> None:
     )
 
 
-def create_app(settings: Settings) -> FastAPI:
-    app = FastAPI(title="JARVIS core", version=VERSION)
+def create_app(
+    settings: Settings, *, core_factory=start_core, auth_timeout_s: float = AUTH_TIMEOUT_S
+) -> FastAPI:
+    bridge = HudBridge()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        if not settings.token:
+            log.error("JARVIS_TOKEN is missing from backend/.env; run scripts/setup.sh")
+        events = EventBus()
+        core = await core_factory(settings, confirmer=bridge.confirm, events=events, hud=bridge)
+        assistant = HudAssistant(core, bridge)
+
+        async def provider_changed(**_):
+            await bridge.broadcast("provider", assistant.provider_status())
+
+        events.subscribe("provider.active", provider_changed)
+        events.subscribe("provider.limit", provider_changed)
+        app.state.assistant = assistant
+        try:
+            yield
+        finally:
+            await core.close()
+
+    app = FastAPI(title="JARVIS core", version=VERSION, lifespan=lifespan)
+    # Only the HUD's own pages may connect, so other websites open in the browser can't.
+    allowed_origins = {*settings.hud_origins, f"http://{settings.host}:{settings.port}"}
 
     @app.get("/api/health")
     async def health() -> dict:
         return {"status": "ok", "version": VERSION}
+
+    async def authenticate(ws: WebSocket) -> bool:
+        """The token comes as the first message: browsers can't set WebSocket headers."""
+        try:
+            first = await asyncio.wait_for(ws.receive_json(), auth_timeout_s)
+        except (TimeoutError, ValueError, WebSocketDisconnect):
+            return False
+        token = (
+            str((first.get("payload") or {}).get("token", "")) if isinstance(first, dict) else ""
+        )
+        return (
+            isinstance(first, dict)
+            and first.get("type") == "auth"
+            and bool(settings.token)
+            and hmac.compare_digest(token.encode(), settings.token.encode())
+        )
+
+    @app.websocket("/ws")
+    async def hud_socket(ws: WebSocket) -> None:
+        origin = ws.headers.get("origin", "")
+        if origin not in allowed_origins:
+            log.warning("refused a WebSocket from origin %r", origin)
+            await ws.close(code=FORBIDDEN_ORIGIN)
+            return
+        await ws.accept()
+        if not await authenticate(ws):
+            await ws.close(code=UNAUTHORIZED)
+            return
+
+        assistant: HudAssistant = app.state.assistant
+        bridge.add(ws)
+        try:
+            await bridge.send(ws, "auth_ok", {"session": secrets.token_hex(4)})
+            await bridge.send(ws, "provider", assistant.provider_status())
+            await bridge.send(ws, "state", {"state": "idle"})
+            while True:
+                try:
+                    message = await ws.receive_json()
+                except json.JSONDecodeError:
+                    await bridge.send(ws, "error", {"message": "Messages must be JSON."})
+                    continue
+                await handle_message(ws, message, assistant)
+        except WebSocketDisconnect:
+            pass
+        finally:
+            bridge.remove(ws)
+
+    async def handle_message(ws: WebSocket, message: dict, assistant: HudAssistant) -> None:
+        kind = message.get("type") if isinstance(message, dict) else None
+        payload = (message.get("payload") or {}) if isinstance(message, dict) else {}
+        if kind == "user_text":
+            bridge.spawn(assistant.handle_text(str(payload.get("text", ""))[:MAX_TEXT]))
+        elif kind == "confirm":
+            bridge.resolve(str(payload.get("actionId", "")), payload.get("approved") is True)
+        elif kind == "gesture_event":
+            log.info("gesture %s on panel %s", payload.get("gesture"), payload.get("panelId"))
+        else:
+            await bridge.send(ws, "error", {"message": f"Unknown message type: {kind!r}"})
+
+    if HUD_DIST.is_dir():  # a built HUD (npm run build) is served by the core itself
+        app.mount("/", StaticFiles(directory=HUD_DIST, html=True), name="hud")
 
     return app
 

@@ -35,6 +35,7 @@ class Settings:
     notes_dir: Path
     history_turns: int
     token: str
+    hud_origins: tuple[str, ...] = ("http://127.0.0.1:5173", "http://localhost:5173")
 
     @property
     def run_dir(self) -> Path:
@@ -82,4 +83,5 @@ def load_settings(config_path: Path | None = None, env_path: Path | None = None)
         notes_dir=_path(tools.get("notes_dir", str(data_dir / "notes"))),
         history_turns=int(brain.get("history_turns", 20)),
         token=os.environ.get("JARVIS_TOKEN", ""),
+        hud_origins=tuple(core.get("hud_origins", Settings.hud_origins)),
     )

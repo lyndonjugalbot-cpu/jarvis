@@ -3,6 +3,7 @@
 import logging
 import secrets
 from dataclasses import dataclass
+from typing import Any
 
 from brain.brain import Brain
 from brain.prompt import build_system_prompt
@@ -11,6 +12,7 @@ from brain.providers.claude_cli import ClaudeCliProvider
 from brain.router import Router
 from config import Settings
 from events import EventBus
+from tools.hud import make_hud_tools
 from tools.mcp_server import McpToolServer
 from tools.notes import make_notes_tools
 from tools.registry import Confirmer, ToolRegistry
@@ -24,20 +26,25 @@ class Core:
     brain: Brain
     router: Router
     registry: ToolRegistry
-    mcp: McpToolServer
+    mcp: McpToolServer | None
     providers: list[Provider]
     events: EventBus
 
     async def close(self) -> None:
         await self.router.close()
-        await self.mcp.stop()
+        if self.mcp:
+            await self.mcp.stop()
 
 
-async def start_core(settings: Settings, *, confirmer: Confirmer, events: EventBus) -> Core:
+async def start_core(
+    settings: Settings, *, confirmer: Confirmer, events: EventBus, hud: Any = None
+) -> Core:
+    """Start the brain. `hud` (a HudBridge) adds the screen tools; the terminal chat has none."""
+    tools = [*make_system_tools(), *make_notes_tools(settings.notes_dir)]
+    if hud is not None:
+        tools += make_hud_tools(hud)
     registry = ToolRegistry(
-        [*make_system_tools(), *make_notes_tools(settings.notes_dir)],
-        confirmer=confirmer,
-        confirm_timeout_s=settings.confirm_timeout_s,
+        tools, confirmer=confirmer, confirm_timeout_s=settings.confirm_timeout_s
     )
     mcp = McpToolServer(registry, token=secrets.token_urlsafe(32))  # fresh token every run
     await mcp.start()
@@ -49,7 +56,7 @@ async def start_core(settings: Settings, *, confirmer: Confirmer, events: EventB
             providers.append(
                 ClaudeCliProvider(
                     settings.claude_plan,
-                    system_prompt=build_system_prompt(settings.user_name),
+                    system_prompt=build_system_prompt(settings.user_name, hud=hud is not None),
                     mcp_config=mcp_config,
                     workdir=settings.data_dir / "work" / "claude",
                     tools_busy=lambda: registry.active_calls > 0,
