@@ -26,7 +26,59 @@ body {
   font-family: var(--font-body);
 }
 
-/* Faint drifting grid and scanlines */
+#scene {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+
+/* Panel content: HTML placed in 3D over the WebGL frames */
+.css-layer {
+  position: fixed !important;
+  inset: 0;
+  pointer-events: none;
+}
+
+.panel-content {
+  box-sizing: border-box;
+  padding: 18px 20px;
+  color: var(--text);
+  font: 13px/1.55 var(--font-body);
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.panel-content h3 {
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(34, 211, 238, 0.45);
+  color: var(--cyan);
+  font: 500 14px var(--font-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-shadow: 0 0 8px rgba(34, 211, 238, 0.6);
+}
+
+.panel-content p {
+  margin: 0;
+}
+
+.panel-content ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.panel-content li {
+  margin-bottom: 4px;
+}
+
+.panel-content li::marker {
+  color: var(--cyan);
+}
+
+/* Faint drifting grid and scanlines over the scene */
 .grid,
 .scanlines {
   position: fixed;
@@ -60,6 +112,7 @@ body {
 
 /* Status bar */
 .status-bar {
+  z-index: 10;
   position: fixed;
   top: 0;
   left: 0;
@@ -80,8 +133,26 @@ body {
 }
 
 .clock {
-  margin-left: auto;
   font-variant-numeric: tabular-nums;
+}
+
+.hud-button {
+  margin-left: auto;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--cyan);
+  font: 12px var(--font-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.hud-button:hover,
+.hud-button:focus-visible {
+  border-color: var(--cyan);
+  outline: none;
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.4);
 }
 
 .indicators {
@@ -122,6 +193,11 @@ body {
   box-shadow: 0 0 8px var(--cyan);
 }
 
+[data-state="idle"] .dot {
+  background: var(--accent);
+  opacity: 0.8;
+}
+
 [data-state="offline"] .dot {
   background: var(--danger);
   opacity: 1;
@@ -133,7 +209,13 @@ body {
 }
 
 /* Core orb, centre-bottom */
+.panel-maximized .stage {
+  opacity: 0.15;
+}
+
 .stage {
+  transition: opacity 250ms ease;
+  pointer-events: none;
   position: fixed;
   inset: 0;
   display: grid;
@@ -196,6 +278,7 @@ body {
 
 /* Transcript strip */
 .transcript {
+  z-index: 10;
   position: fixed;
   left: 50%;
   bottom: 24px;
@@ -214,6 +297,180 @@ body {
 
 .transcript .system {
   color: var(--muted);
+}
+
+kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--cyan);
+  font: 12px var(--font-body);
+}
+
+/* Dock of minimized panels */
+.dock {
+  z-index: 10;
+  position: fixed;
+  left: 24px;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dock-item {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font: 12px var(--font-display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+/* Fingertip cursor: the dot fills with pinch strength; the ring charges during holds */
+.cursor {
+  z-index: 20;
+  position: fixed;
+  top: -26px;
+  left: -26px;
+  width: 52px;
+  height: 52px;
+  pointer-events: none;
+  --strength: 0;
+}
+
+.cursor svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+
+.cursor-track,
+.cursor-charge {
+  fill: none;
+  stroke-width: 2;
+}
+
+.cursor-track {
+  stroke: rgba(34, 211, 238, 0.25);
+}
+
+.cursor-charge {
+  stroke: var(--cyan);
+  stroke-dashoffset: 1000;
+  filter: drop-shadow(0 0 4px var(--cyan));
+}
+
+.cursor-dot {
+  position: absolute;
+  inset: 18px;
+  border: 2px solid var(--muted);
+  border-radius: 50%;
+  background: rgba(34, 211, 238, calc(var(--strength) * 0.9));
+}
+
+.cursor.armed .cursor-dot {
+  border-color: var(--cyan);
+  box-shadow: 0 0 12px var(--cyan);
+}
+
+/* Debug overlay, settings drawer and key help */
+.debug {
+  z-index: 15;
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: 320px;
+  border: 1px solid var(--line);
+  background: rgba(5, 8, 15, 0.85);
+}
+
+.debug canvas {
+  display: block;
+  width: 320px;
+  height: 180px;
+}
+
+.debug pre {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--text);
+  font: 11px/1.5 ui-monospace, monospace;
+  white-space: pre-wrap;
+}
+
+.debug-log {
+  border-top: 1px solid var(--line);
+  color: var(--cyan) !important;
+}
+
+.drawer {
+  z-index: 30;
+  position: fixed;
+  top: 64px;
+  right: 24px;
+  bottom: 24px;
+  width: min(380px, calc(100vw - 48px));
+  overflow-y: auto;
+  padding: 16px;
+  border: 1px solid var(--line);
+  background: rgba(5, 8, 15, 0.94);
+}
+
+.drawer header {
+  display: flex;
+  align-items: center;
+}
+
+.drawer h2 {
+  margin: 0 0 12px;
+  color: var(--cyan);
+  font: 500 14px var(--font-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.setting {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.setting input[type="range"] {
+  grid-column: 1;
+  accent-color: var(--cyan);
+}
+
+.setting output {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.help dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 14px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.help dt {
+  color: var(--cyan);
+  font-family: var(--font-display);
+}
+
+.help dd {
+  margin: 0;
+  color: var(--text);
+}
+
+[hidden] {
+  display: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

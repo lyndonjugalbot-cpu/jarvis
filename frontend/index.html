@@ -10,6 +10,8 @@
     />
   </head>
   <body>
+    <canvas id="scene"></canvas>
+    <div id="css-layer" class="css-layer"></div>
     <div class="grid" aria-hidden="true"></div>
     <div class="scanlines" aria-hidden="true"></div>
 
@@ -17,7 +19,7 @@
       <div class="wordmark">J.A.R.V.I.S.</div>
       <ul class="indicators">
         <li data-indicator="gestures" data-state="off">
-          <span class="dot"></span><span class="label">Gestures</span><span class="value">off</span>
+          <span class="dot"></span><span class="label">Gestures</span><span class="value">camera off</span>
         </li>
         <li data-indicator="mic" data-state="off">
           <span class="dot"></span><span class="label">Mic</span><span class="value">off</span>
@@ -29,6 +31,7 @@
           <span class="dot"></span><span class="label">Brain</span><span class="value">not linked</span>
         </li>
       </ul>
+      <button id="camera-toggle" class="hud-button" type="button">Start camera</button>
       <time id="clock" class="clock"></time>
     </header>
 
@@ -41,10 +44,54 @@
       </div>
     </main>
 
+    <nav id="dock" class="dock" aria-label="Minimized panels"></nav>
+
     <footer class="transcript">
-      <p class="line system">HUD shell online. Hand tracking and panels arrive in Phase 2.</p>
+      <p class="line system" id="say">
+        Press <kbd>C</kbd> to start the camera, or <kbd>P</kbd> for a gesture demo. <kbd>?</kbd> lists every key.
+      </p>
     </footer>
 
+    <div class="cursor" id="cursor" hidden>
+      <svg viewBox="0 0 52 52" aria-hidden="true">
+        <circle class="cursor-track" cx="26" cy="26" r="22" />
+        <circle class="cursor-charge" cx="26" cy="26" r="22" />
+      </svg>
+      <span class="cursor-dot"></span>
+    </div>
+
+    <aside class="debug" id="debug" hidden>
+      <canvas width="320" height="180"></canvas>
+      <pre class="debug-info"></pre>
+      <pre class="debug-log"></pre>
+    </aside>
+
+    <aside class="drawer" id="settings" hidden>
+      <header>
+        <h2>Gesture settings</h2>
+        <button class="hud-button settings-reset" type="button">Reset</button>
+      </header>
+      <div class="settings-list"></div>
+    </aside>
+
+    <aside class="drawer help" id="help" hidden>
+      <h2>Keys</h2>
+      <dl>
+        <dt>C</dt><dd>Camera on/off</dd>
+        <dt>P</dt><dd>Play the gesture demo</dd>
+        <dt>D</dt><dd>Debug view: tracked hands, poses, events</dd>
+        <dt>S</dt><dd>Gesture settings</dd>
+        <dt>R</dt><dd>Record a landmark session to JSON (camera on)</dd>
+        <dt>N</dt><dd>New panel</dd>
+        <dt>&larr; &rarr;</dt><dd>Change focus</dd>
+        <dt>F</dt><dd>Maximize / restore the focused panel</dd>
+        <dt>M</dt><dd>Minimize the focused panel</dd>
+        <dt>X</dt><dd>Close the focused panel</dd>
+        <dt>Mouse</dt><dd>Drag panels; double-click to maximize</dd>
+      </dl>
+    </aside>
+
+    <video id="camera" playsinline muted hidden></video>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

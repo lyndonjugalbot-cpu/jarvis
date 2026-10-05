@@ -4,13 +4,20 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/assets.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/assets.mjs",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test \"tests/*.test.js\""
   },
   "devDependencies": {
     "@fontsource/inter": "^5.3.0",
     "@fontsource/orbitron": "^5.3.0",
     "vite": "^8.3.2"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^1.0.1",
+    "three": "^0.186.1"
   }
 }

@@ -7,7 +7,8 @@
 node_modules/
 .venv/
 frontend/dist/
-frontend/public/models/*.task
+frontend/public/models/
+frontend/public/mediapipe/
 
 # Caches
 __pycache__/

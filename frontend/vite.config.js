@@ -11,4 +11,6 @@ export default defineConfig({
     proxy: { "/api": core },
   },
   preview: { host: "127.0.0.1", port: 4173, strictPort: true },
+  // Served locally, so one ~750 kB bundle (Three.js + MediaPipe) is fine.
+  build: { chunkSizeWarningLimit: 1000 },
 });
