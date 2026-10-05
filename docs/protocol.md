@@ -34,6 +34,7 @@ If the connection drops, the HUD reconnects with backoff (0.5 s, doubling up to 
 | `confirm` | `{ "actionId": "a7", "approved": true }` | Answer to a `confirm_request`; the first HUD to answer decides |
 | `gesture_event` | `{ "gesture": "swipe_right", "panelId": "p12" }` | Logged now, used as context later |
 | `connect_google` | `{}` | Run Google's browser sign-in on the core's computer |
+| `mic` | `{ "on": true }` | Switch the core's microphone on or off |
 
 ## Core -> HUD
 
@@ -48,6 +49,7 @@ If the connection drops, the HUD reconnects with backoff (0.5 s, doubling up to 
 | `confirm_request` | `{ "actionId": "a7", "summary": "Save a note titled \"Groceries\"?" }` | A risky tool is waiting for approval |
 | `confirm_done` | `{ "actionId": "a7", "approved": false }` | Answered, timed out (30 s counts as no), or answered on another HUD; close the prompt |
 | `provider` | `{ "active", "label", "paid", "coolingDown": [...], "order": [...] }` | Which model provider is answering, for the status bar |
+| `mic` | `{ "state": "off" \| "starting" \| "wake" \| "listening" \| "unavailable", "message": "..." }` | The microphone's state, for the Mic indicator |
 | `auth_needed` | `{ "service": "google", "message": "..." }` | Access was lost; the HUD shows a Connect button |
 | `auth_done` | `{ "service": "google", "ok": true, "message": "..." }` | How the sign-in went |
 | `error` | `{ "message": "..." }` | A friendly error to show |

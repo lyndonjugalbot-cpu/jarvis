@@ -69,7 +69,8 @@ def client(tmp_path, monkeypatch):
         notes_dir=tmp_path / "notes",
         confirm_timeout_s=2,
     )
-    with TestClient(create_app(settings, core_factory=fake_core, auth_timeout_s=0.3)) as c:
+    app = create_app(settings, core_factory=fake_core, auth_timeout_s=0.3, voice_enabled=False)
+    with TestClient(app) as c:
         yield c
 
 
@@ -82,6 +83,7 @@ def connect(client):
     assert provider["type"] == "provider"
     assert provider["payload"]["order"] == ["Fake plan"]
     assert session.receive_json()["payload"] == {"state": "idle"}
+    assert session.receive_json()["type"] == "mic"
     return ws, session
 
 

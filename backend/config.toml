@@ -58,6 +58,18 @@ recall_k = 5                  # earlier exchanges, summaries and notes that go w
 min_similarity = 0.65         # how close a memory must be to count (0-1); unrelated ones score under 0.6
 resume_hours = 6              # after a restart, continue the last conversation if it's this recent
 
+[voice]
+enabled = true                # hands-free: "Hey Jarvis" in the core server (scripts/start.sh core)
+wake_threshold = 0.5          # raise if it wakes by mistake, lower if it misses you
+whisper_model = "base.en"     # speech to text; "small.en" is more accurate (~480 MB, slower)
+tts = "piper"                 # piper (natural, local) | say (macOS built-in)
+piper_voice = "en_GB-alan-medium"
+say_voice = "Daniel"
+input_device = ""             # empty = the system default microphone
+output_device = ""            # empty = the system default speakers
+silence_ms = 800              # this much quiet ends a request
+max_listen_s = 15
+
 [tools]
 confirm_timeout_s = 30        # no answer to a confirmation counts as "no"
 file_roots = ["~/Documents", "~/Desktop", "~/Downloads"]   # the only folders JARVIS may search and read

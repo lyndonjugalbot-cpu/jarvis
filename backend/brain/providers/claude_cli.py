@@ -103,6 +103,12 @@ class ClaudeCliProvider:
         self._auth_ok_until = time.monotonic() + AUTH_CACHE_S
         return True
 
+    async def prewarm(self) -> None:
+        """Start the CLI ahead of the first request (it loads and connects JARVIS's tools)."""
+        async with self._lock:
+            if self._proc is None and await self.available():
+                await self._start()
+
     # ------------------------------------------------------------ process
     def _args(self) -> list[str]:
         builtin = list(self._s.builtin_tools)

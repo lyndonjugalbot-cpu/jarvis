@@ -23,6 +23,7 @@ class HudBridge:
         self._action_ids = itertools.count(1)
         self._message_ids = itertools.count(1)
         self._tasks: set[asyncio.Task] = set()
+        self.voice = None  # a VoiceLoop, once voice has started
 
     @property
     def connected(self) -> bool:
@@ -52,8 +53,9 @@ class HudBridge:
                 self._clients.discard(ws)
 
     async def confirm(self, summary: str) -> bool:
-        """Ask the HUDs to approve an action. The registry's timeout counts silence as no."""
-        if not self._clients:
+        """Ask the HUDs (and, during a voice request, out loud) to approve an action. The first
+        answer wins; the registry's timeout counts silence as no."""
+        if not self._clients and self.voice is None:
             return False
         action_id = f"a{next(self._action_ids)}"
         future: asyncio.Future[bool] = asyncio.get_running_loop().create_future()
@@ -61,14 +63,23 @@ class HudBridge:
         approved = False
         try:
             await self.broadcast("confirm_request", {"actionId": action_id, "summary": summary})
+            if self.voice is not None:
+                self.spawn(self._ask_by_voice(action_id, summary))
             approved = await future
             return approved
         finally:
             self._pending.pop(action_id, None)
+            if self.voice is not None:
+                self.voice.cancel_confirm(action_id)
             # A task, so the HUDs hear about it even when the wait was cancelled by the timeout.
             self.spawn(
                 self.broadcast("confirm_done", {"actionId": action_id, "approved": approved})
             )
+
+    async def _ask_by_voice(self, action_id: str, summary: str) -> None:
+        decision = await self.voice.confirm(action_id, summary)
+        if decision is not None:
+            self.resolve(action_id, decision)
 
     def resolve(self, action_id: str, approved: bool) -> bool:
         future = self._pending.get(action_id)
@@ -97,16 +108,20 @@ class HudAssistant:
             "budget": self._core.budget.summary() if getattr(self._core, "budget", None) else None,
         }
 
-    async def handle_text(self, text: str) -> None:
+    async def handle_text(self, text: str, *, end_state: str | None = "idle") -> str | None:
+        """Run one request and return JARVIS's reply. Voice passes end_state=None and sets the
+        orb itself (speaking, then idle)."""
         text = text.strip()
         if not text:
-            return
+            return None
         bridge = self._bridge
+        reply_text: str | None = None
         async with self._lock:  # one request at a time; later ones wait their turn
             await bridge.broadcast("transcript", {"role": "user", "text": text})
             await bridge.broadcast("state", {"state": "thinking"})
             try:
                 reply = await self._core.brain.ask(text)
+                reply_text = reply.text
                 await bridge.broadcast(
                     "transcript",
                     {
@@ -127,6 +142,7 @@ class HudAssistant:
                 message = f"I can't answer right now: {e}.{when}"
                 await bridge.broadcast("error", {"message": message})
                 await bridge.broadcast("transcript", {"role": "jarvis", "text": message})
+                reply_text = message
             except Exception:
                 log.exception("turn failed")
                 await bridge.broadcast(
@@ -134,4 +150,6 @@ class HudAssistant:
                     {"message": "Something went wrong on my side. The details are in the log."},
                 )
             finally:
-                await bridge.broadcast("state", {"state": "idle"})
+                if end_state:
+                    await bridge.broadcast("state", {"state": end_state})
+        return reply_text

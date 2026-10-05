@@ -100,6 +100,22 @@ socket.on("transcript", ({ role, text, provider, tools, seconds, cost }) => {
   transcript.add(role, text, meta);
 });
 socket.on("error", ({ message }) => say(message));
+
+// Microphone: the core listens for "Hey Jarvis"; clicking the Mic indicator switches it on or off.
+const MIC_TEXT = { off: "off", starting: "starting", wake: '"Hey Jarvis"', listening: "listening", unavailable: "unavailable" };
+const micIndicator = document.querySelector('[data-indicator="mic"]');
+let micState = "off";
+socket.on("mic", ({ state, message }) => {
+  micState = state;
+  const look = { wake: "online", listening: "armed", starting: "idle", unavailable: "offline" }[state] ?? "off";
+  setIndicator("mic", look, MIC_TEXT[state] ?? state);
+  micIndicator.title = message || (state === "off" ? "Click to turn the microphone on" : "Click to turn the microphone off");
+  if (message && state !== "wake") say(message);
+});
+micIndicator.addEventListener("click", () => {
+  if (micState === "unavailable" || micState === "starting") return;
+  socket.send("mic", { on: micState === "off" });
+});
 socket.on("provider", ({ label, paid, coolingDown, order, budget }) => {
   const name = label || order?.[0] || "no provider";
   const spend = budget ? ` $${budget.spent_usd.toFixed(2)}/$${budget.cap_usd}` : "";

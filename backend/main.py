@@ -50,7 +50,11 @@ def setup_logging(settings: Settings, *, console: bool) -> None:
 
 
 def create_app(
-    settings: Settings, *, core_factory=start_core, auth_timeout_s: float = AUTH_TIMEOUT_S
+    settings: Settings,
+    *,
+    core_factory=start_core,
+    auth_timeout_s: float = AUTH_TIMEOUT_S,
+    voice_enabled: bool = True,
 ) -> FastAPI:
     bridge = HudBridge()
 
@@ -91,9 +95,19 @@ def create_app(
         events.subscribe("google.lost", google_lost)
         app.state.assistant = assistant
         app.state.core = core
+        app.state.voice = None
+        if settings.voice.enabled and voice_enabled:
+            from voice.service import VoiceService
+
+            app.state.voice = VoiceService(
+                settings.voice, settings.data_dir / "models", assistant, bridge
+            )
+            app.state.voice.start()
         try:
             yield
         finally:
+            if app.state.voice:
+                await app.state.voice.stop()
             await core.close()
 
     app = FastAPI(title="JARVIS core", version=VERSION, lifespan=lifespan)
@@ -138,6 +152,8 @@ def create_app(
             await bridge.send(ws, "auth_ok", {"session": secrets.token_hex(4)})
             await bridge.send(ws, "provider", assistant.provider_status())
             await bridge.send(ws, "state", {"state": "idle"})
+            voice = app.state.voice
+            await bridge.send(ws, "mic", {"state": voice.state if voice else "off", "message": ""})
             while True:
                 try:
                     message = await ws.receive_json()
@@ -159,6 +175,9 @@ def create_app(
             bridge.resolve(str(payload.get("actionId", "")), payload.get("approved") is True)
         elif kind == "gesture_event":
             log.info("gesture %s on panel %s", payload.get("gesture"), payload.get("panelId"))
+        elif kind == "mic":
+            if app.state.voice:
+                await app.state.voice.set_enabled(payload.get("on") is True)
         elif kind == "connect_google":
             bridge.spawn(connect_google(app.state.core.google))
         else:

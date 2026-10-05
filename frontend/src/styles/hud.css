@@ -178,6 +178,10 @@ body {
   color: var(--text);
 }
 
+[data-indicator="mic"] {
+  cursor: pointer;
+}
+
 .dot {
   width: 8px;
   height: 8px;

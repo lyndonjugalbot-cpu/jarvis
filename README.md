@@ -17,8 +17,8 @@ come next, and a pay-per-use API is only the last resort, with a monthly cap.
 | 4. Real tools | Done: weather, files, system, Calendar and Gmail (after the one-time [Google setup](docs/google-setup.md)), reconnect flow |
 | 5. Fallback chain | Done: ChatGPT plan (Codex), local Ollama model, capped paid Claude API, failover |
 | 6. Memory | Done: facts, conversation history across restarts, local embeddings for recall, background summaries, remember/recall/forget |
-| 7. Voice | Next |
-| 8. Polish | Not started |
+| 7. Voice | Done: "Hey Jarvis" wake word, local speech-to-text and voice, barge-in, spoken yes/no for approvals |
+| 8. Polish | Next |
 
 ## Requirements
 
@@ -105,6 +105,39 @@ JARVIS remembers across sessions, entirely on your computer (`~/.jarvis/jarvis.d
 
 Recalled memories are part of the request, so they go to whichever provider answers it.
 
+## Voice
+
+The core listens for **"Hey Jarvis"** whenever it runs (`scripts/start.sh core`). Say the wake
+word, then your request; JARVIS answers out loud and on the HUD. Everything runs on your computer:
+
+- **Wake word:** openWakeWord's "hey jarvis" model. About 1 ms per 80 ms of audio, so it can
+  listen all the time.
+- **Speech to text:** faster-whisper `base.en`.
+- **Voice:** Piper `en_GB-alan-medium`, sentence by sentence, so it starts talking sooner.
+  macOS `say` is the alternative (`[voice] tts = "say"`).
+- **Interrupting:** say "Hey Jarvis" while JARVIS is talking to stop it and ask something else.
+  Loudness alone can't do this, because the microphone also hears JARVIS's own voice.
+- **Approvals:** during a voice request, JARVIS reads out the approval question and listens for
+  yes or no. A thumbs-up or a click on the HUD works too; the first answer counts.
+- **Mic indicator:** shows what it's doing (`"Hey Jarvis"`, listening, off). Click it to switch
+  the microphone off and on.
+
+Measured on this MacBook Air for a simple question: the voice starts about 2.5 s after you stop
+talking (0.8 s to decide you've finished, 0.1 s to transcribe, about 1.5 s for the Claude plan
+to answer). Requests that use tools take longer.
+
+**First run:**
+- The models download into `~/.jarvis/models`: about 200 MB, plus small wake-word files.
+- macOS asks to let your terminal use the microphone. If you said no, the Mic indicator shows
+  "unavailable". Allow it in **System Settings > Privacy & Security > Microphone**, then restart
+  the core.
+
+**Tuning in `[voice]`:**
+- `wake_threshold`: raise it if JARVIS wakes by mistake, lower it if it misses you.
+- `whisper_model = "small.en"`: more accurate, but slower and about 480 MB.
+- `input_device` and `output_device`: pick a microphone and speakers.
+- `enabled = false`: no voice at all.
+
 ## The HUD
 
 Start the core and the HUD in two terminals, then open http://127.0.0.1:5173:
@@ -131,7 +164,7 @@ and [docs/protocol.md](docs/protocol.md) for the WebSocket messages.
 ## Layout
 
 ```
-backend/   main.py (server, /ws), core.py, hud_bridge.py, terminal.py, brain/ (router, providers, budget), memory/ (store, embeddings), tools/ (registry, MCP server, tools), auth/google.py, tests/
+backend/   main.py (server, /ws), core.py, hud_bridge.py, terminal.py, brain/ (router, providers, budget), memory/ (store, embeddings), voice/ (loop, engines, audio), tools/ (registry, MCP server, tools), auth/google.py, tests/
 frontend/  Vite app: src/hud/ (scene, panels, cursor, transcript, confirm, debug, settings), src/gestures/ (tracker, pose, recognizer, arbiter, controller), src/net/socket.js, tests/
 scripts/   setup.sh, start.sh
 docs/      providers.md, gestures.md, protocol.md, google-setup.md

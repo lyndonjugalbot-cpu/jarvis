@@ -69,6 +69,20 @@ class MemorySettings:
 
 
 @dataclass(frozen=True)
+class VoiceSettings:
+    enabled: bool = True
+    wake_threshold: float = 0.5
+    whisper_model: str = "base.en"
+    tts: str = "piper"  # piper | say (macOS)
+    piper_voice: str = "en_GB-alan-medium"
+    say_voice: str = "Daniel"
+    input_device: str = ""
+    output_device: str = ""
+    silence_ms: int = 800
+    max_listen_s: float = 15.0
+
+
+@dataclass(frozen=True)
 class Settings:
     host: str
     port: int
@@ -90,6 +104,7 @@ class Settings:
     paid_api: PaidApiSettings = PaidApiSettings()
     anthropic_api_key: str = ""
     memory: MemorySettings = MemorySettings()
+    voice: VoiceSettings = VoiceSettings()
 
     @property
     def run_dir(self) -> Path:
@@ -167,4 +182,5 @@ def load_settings(config_path: Path | None = None, env_path: Path | None = None)
         paid_api=_section(PaidApiSettings, providers.get("paid_api", {})),
         anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
         memory=_section(MemorySettings, raw.get("memory", {})),
+        voice=_section(VoiceSettings, raw.get("voice", {})),
     )

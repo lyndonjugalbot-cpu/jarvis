@@ -141,6 +141,9 @@ async def start_core(
             provider = SimulatedLimit(provider)
         providers.append(provider)
 
+    for provider in providers:
+        if hasattr(provider, "prewarm"):
+            asyncio.create_task(provider.prewarm())
     router = Router(providers, events)
     brain = Brain(
         router,
