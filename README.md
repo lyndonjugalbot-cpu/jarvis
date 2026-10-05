@@ -16,8 +16,9 @@ come next, and a pay-per-use API is only the last resort, with a monthly cap.
 | 3. Connect | Done: WebSocket link (Origin check, first-message token), typing in the HUD, panels from the core, approve/cancel prompt, orb states, provider badge |
 | 4. Real tools | Done: weather, files, system, Calendar and Gmail (after the one-time [Google setup](docs/google-setup.md)), reconnect flow |
 | 5. Fallback chain | Done: ChatGPT plan (Codex), local Ollama model, capped paid Claude API, failover |
-| 6. Memory | Next |
-| 7-8 | Not started |
+| 6. Memory | Done: facts, conversation history across restarts, local embeddings for recall, background summaries, remember/recall/forget |
+| 7. Voice | Next |
+| 8. Polish | Not started |
 
 ## Requirements
 
@@ -78,11 +79,31 @@ Settings are in `backend/config.toml`. Logs and notes are in `~/.jarvis/`.
 | Files | `search_files` (Spotlight), `read_file` (text only), limited to `[tools] file_roots` | No |
 | This computer | `system_stats`, `open_app`, `open_url` (http/https only) | No |
 | Web | `web_search` (DuckDuckGo; for the local model and paid API; the plan CLIs use their own) | No |
+| Memory | `remember`, `recall`, `forget` | Forgetting |
 | Screen | `show_panel`, `close_panel` | No |
 | Google account | `connect_google` | No |
 
 Calendar and Gmail need a one-time setup of your own Google Cloud project:
 [docs/google-setup.md](docs/google-setup.md), then `scripts/start.sh google`.
+
+## Memory
+
+JARVIS remembers across sessions, entirely on your computer (`~/.jarvis/jarvis.db`):
+
+- **Facts** you tell it to keep (`remember`), such as your name, people, preferences. All of them
+  go with every request.
+- **Every exchange**, so a restart within `resume_hours` (default 6) continues the conversation.
+  Older turns of a long session are summarized in the background, on your plans and never the
+  paid API.
+- **Recall by meaning:**
+  - Facts, past exchanges, summaries and notes are embedded with a small local model
+    (`BAAI/bge-small-en-v1.5`, 64 MB in `~/.jarvis/models`).
+  - The five closest matches from earlier sessions go with each request (similarity 0.65 or
+    more).
+- **Forgetting:** "forget everything about the dentist" deletes matching facts, exchanges and
+  summaries after you approve. Notes are kept.
+
+Recalled memories are part of the request, so they go to whichever provider answers it.
 
 ## The HUD
 
@@ -110,7 +131,7 @@ and [docs/protocol.md](docs/protocol.md) for the WebSocket messages.
 ## Layout
 
 ```
-backend/   main.py (server, /ws), core.py, hud_bridge.py, terminal.py, brain/ (router, providers), tools/ (registry, MCP server, tools), auth/google.py, tests/
+backend/   main.py (server, /ws), core.py, hud_bridge.py, terminal.py, brain/ (router, providers, budget), memory/ (store, embeddings), tools/ (registry, MCP server, tools), auth/google.py, tests/
 frontend/  Vite app: src/hud/ (scene, panels, cursor, transcript, confirm, debug, settings), src/gestures/ (tracker, pose, recognizer, arbiter, controller), src/net/socket.js, tests/
 scripts/   setup.sh, start.sh
 docs/      providers.md, gestures.md, protocol.md, google-setup.md

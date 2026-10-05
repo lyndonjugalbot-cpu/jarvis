@@ -1,5 +1,6 @@
 """Wires the core together: tool registry, MCP tool server, providers, router and brain."""
 
+import asyncio
 import logging
 import os
 import secrets
@@ -18,12 +19,15 @@ from brain.providers.ollama import OllamaProvider
 from brain.router import Router, SimulatedLimit
 from config import Settings
 from events import EventBus
+from memory.embeddings import FastEmbedder
+from memory.store import MemoryStore
 from tools.calendar import make_calendar_tools
 from tools.email import make_email_tools
 from tools.files import make_file_tools
 from tools.google_account import make_google_account_tools
 from tools.hud import make_hud_tools
 from tools.mcp_server import McpToolServer
+from tools.memory import make_memory_tools
 from tools.notes import make_notes_tools
 from tools.registry import Confirmer, ToolRegistry
 from tools.system import make_system_tools
@@ -44,6 +48,7 @@ class Core:
     google: GoogleAuth | None = None
     google_api: GoogleApi | None = None
     budget: Budget | None = None
+    memory: MemoryStore | None = None
 
     async def close(self) -> None:
         await self.router.close()
@@ -53,23 +58,32 @@ class Core:
             await self.google_api.close()
         if self.budget:
             self.budget.close()
+        if self.memory:
+            self.memory.close()
 
 
 async def start_core(
     settings: Settings, *, confirmer: Confirmer, events: EventBus, hud: Any = None
 ) -> Core:
     """Start the brain. `hud` (a HudBridge) adds the screen tools; the terminal chat has none."""
+    memory = None
+    if settings.memory.enabled:
+        embedder = FastEmbedder(settings.memory.embed_model, settings.data_dir / "models")
+        memory = MemoryStore(settings.db_path, embedder)
+        # Load the embedding model (and index the notes) now, not on the first request.
+        asyncio.create_task(_prepare_memory(embedder, memory, settings.notes_dir))
     google = GoogleAuth(settings.google_client_file, settings.google_token_file, events)
     google_api = GoogleApi(google)
     tools = [
         *make_system_tools(),
-        *make_notes_tools(settings.notes_dir),
+        *make_notes_tools(settings.notes_dir, on_saved=memory.index_note if memory else None),
         *make_file_tools(list(settings.file_roots)),
         *make_weather_tools(home_place(settings.location)),
         *make_calendar_tools(google_api),
         *make_email_tools(google_api),
         *make_google_account_tools(google),
         *make_web_tools(),
+        *(make_memory_tools(memory) if memory else []),
     ]
     if hud is not None:
         tools += make_hud_tools(hud)
@@ -128,5 +142,24 @@ async def start_core(
         providers.append(provider)
 
     router = Router(providers, events)
-    brain = Brain(router, registry, history_turns=settings.history_turns)
-    return Core(brain, router, registry, mcp, providers, events, google, google_api, budget)
+    brain = Brain(
+        router,
+        registry,
+        history_turns=settings.history_turns,
+        memory=memory,
+        recall_k=settings.memory.recall_k,
+        min_similarity=settings.memory.min_similarity,
+        resume_hours=settings.memory.resume_hours,
+    )
+    return Core(brain, router, registry, mcp, providers, events, google, google_api, budget, memory)
+
+
+async def _prepare_memory(embedder: FastEmbedder, memory: MemoryStore, notes_dir) -> None:
+    try:
+        await embedder.warm_up()
+        for path in sorted(notes_dir.glob("*.md")) if notes_dir.exists() else []:
+            body = path.read_text(encoding="utf-8")
+            title = body.splitlines()[0].lstrip("# ").strip() if body else path.stem
+            await memory.index_note(title, body)
+    except Exception:
+        log.exception("couldn't prepare memory; recall will retry on demand")

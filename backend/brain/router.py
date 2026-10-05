@@ -72,9 +72,11 @@ class Router:
             "coolingDown": {n: t for n, t in self._cooldown_until.items() if t > now},
         }
 
-    async def send(self, turn: Turn) -> Reply:
+    async def send(self, turn: Turn, *, allow_paid: bool = True) -> Reply:
         failures: list[str] = []
         for provider in self._providers:
+            if not allow_paid and getattr(provider, "paid", False):
+                continue
             until = self._cooldown_until.get(provider.name, 0.0)
             if until > self._clock():
                 failures.append(f"{provider.label} is cooling down")

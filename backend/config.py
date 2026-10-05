@@ -60,6 +60,15 @@ class PaidApiSettings:
 
 
 @dataclass(frozen=True)
+class MemorySettings:
+    enabled: bool = True
+    embed_model: str = "BAAI/bge-small-en-v1.5"
+    recall_k: int = 5
+    min_similarity: float = 0.65
+    resume_hours: float = 6.0
+
+
+@dataclass(frozen=True)
 class Settings:
     host: str
     port: int
@@ -80,6 +89,7 @@ class Settings:
     local: LocalSettings = LocalSettings()
     paid_api: PaidApiSettings = PaidApiSettings()
     anthropic_api_key: str = ""
+    memory: MemorySettings = MemorySettings()
 
     @property
     def run_dir(self) -> Path:
@@ -110,7 +120,9 @@ def _section(cls, raw: dict):
 
 
 def load_settings(config_path: Path | None = None, env_path: Path | None = None) -> Settings:
-    config_path = config_path or BACKEND_DIR / "config.toml"
+    config_path = config_path or Path(
+        os.environ.get("JARVIS_CONFIG") or BACKEND_DIR / "config.toml"
+    )
     load_dotenv(env_path or BACKEND_DIR / ".env")
     raw = tomllib.loads(config_path.read_text()) if config_path.exists() else {}
 
@@ -154,4 +166,5 @@ def load_settings(config_path: Path | None = None, env_path: Path | None = None)
         local=_section(LocalSettings, providers.get("local", {})),
         paid_api=_section(PaidApiSettings, providers.get("paid_api", {})),
         anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
+        memory=_section(MemorySettings, raw.get("memory", {})),
     )

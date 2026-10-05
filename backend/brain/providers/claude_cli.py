@@ -21,7 +21,7 @@ from brain.providers.base import (
     ProviderUnavailable,
     Reply,
     Turn,
-    with_history,
+    compose,
 )
 from config import ClaudePlanSettings
 
@@ -170,7 +170,8 @@ class ClaudeCliProvider:
     # ------------------------------------------------------------ turns
     def _compose(self, turn: Turn) -> str:
         # A warm process remembers the conversation; a fresh one gets it in the first message.
-        return turn.text if self._turns_in_process else with_history(turn)
+        # Recalled memory comes with every message, since it depends on what was asked.
+        return compose(turn, include_history=not self._turns_in_process)
 
     async def send(self, turn: Turn) -> Reply:
         async with self._lock:

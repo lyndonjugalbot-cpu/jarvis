@@ -9,6 +9,7 @@ class Turn:
     id: str
     text: str
     history: tuple[tuple[str, str], ...] = ()  # earlier (role, text) pairs, oldest first
+    memory: tuple[str, ...] = ()  # facts and recalled snippets from earlier sessions
 
 
 @dataclass
@@ -23,15 +24,27 @@ class Reply:
 HISTORY_CHARS = 6000
 
 
-def with_history(turn: Turn, max_chars: int = HISTORY_CHARS) -> str:
-    """The request with the recent conversation in front, for a model starting fresh."""
-    if not turn.history:
+def compose(turn: Turn, *, include_history: bool = True, max_chars: int = HISTORY_CHARS) -> str:
+    """The request as the model sees it: recalled memory, then (for a model starting fresh) the
+    recent conversation, then the new message."""
+    parts = []
+    if turn.memory:
+        remembered = "\n".join(f"- {line}" for line in turn.memory)
+        parts.append(
+            f"What you remember from before (background; use it only if relevant):\n{remembered}"
+        )
+    if include_history and turn.history:
+        context = "\n".join(f"{role}: {text}" for role, text in turn.history)[-max_chars:]
+        parts.append(
+            f"Earlier in this conversation (context only; it already happened):\n{context}"
+        )
+    if not parts:
         return turn.text
-    context = "\n".join(f"{role}: {text}" for role, text in turn.history)[-max_chars:]
-    return (
-        "Earlier in this conversation (context only; it already happened):\n"
-        f"{context}\n\nNew message:\n{turn.text}"
-    )
+    return "\n\n".join([*parts, f"New message:\n{turn.text}"])
+
+
+def with_history(turn: Turn, max_chars: int = HISTORY_CHARS) -> str:
+    return compose(turn, max_chars=max_chars)
 
 
 class ProviderError(Exception):

@@ -18,7 +18,9 @@ def slugify(title: str) -> str:
     return slug[:80] or "untitled"
 
 
-def make_notes_tools(notes_dir: Path) -> list[ToolSpec]:
+def make_notes_tools(notes_dir: Path, on_saved=None) -> list[ToolSpec]:
+    """`on_saved(title, text)`, if given, is awaited after a note is written (memory indexes it)."""
+
     def path_for(title: str) -> Path:
         return notes_dir / f"{slugify(title)}.md"
 
@@ -31,12 +33,15 @@ def make_notes_tools(notes_dir: Path) -> list[ToolSpec]:
         notes_dir.mkdir(parents=True, exist_ok=True)
         path = path_for(title)
         stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-        if path.exists():
+        existed = path.exists()
+        if existed:
             with path.open("a", encoding="utf-8") as f:
                 f.write(f"\n\n_{stamp}_\n\n{text.strip()}\n")
-            return {"saved": path.name, "added_to_existing": True}
-        path.write_text(f"# {title.strip()}\n\n_{stamp}_\n\n{text.strip()}\n", encoding="utf-8")
-        return {"saved": path.name, "added_to_existing": False}
+        else:
+            path.write_text(f"# {title.strip()}\n\n_{stamp}_\n\n{text.strip()}\n", encoding="utf-8")
+        if on_saved:
+            await on_saved(title.strip(), path.read_text(encoding="utf-8"))
+        return {"saved": path.name, "added_to_existing": existed}
 
     @tool()
     async def list_notes(
