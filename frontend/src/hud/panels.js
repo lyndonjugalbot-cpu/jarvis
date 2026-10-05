@@ -60,11 +60,32 @@ export class PanelManager {
   // Open a panel from the core, or update it if it is already here.
   show(spec) {
     const existing = this.find(spec.id);
-    if (!existing) return this.add({ ...spec, position: this.freeSpot() });
+    if (!existing) {
+      if (!this.hasFreeSlot()) {
+        // Keep the HUD readable: the panel looked at least recently moves to the dock.
+        const oldest = this.visible()
+          .filter((p) => p !== this.focused)
+          .sort((a, b) => a.touchedAt - b.touchedAt)[0];
+        if (oldest) this.minimize(oldest);
+      }
+      return this.add({ ...spec, position: this.freeSpot() });
+    }
     existing.setContent(spec.title ?? existing.title, spec.data ?? existing.data, spec.type ?? existing.type);
     if (existing.state === "minimized") this.unminimize(existing);
     else this.focus(existing);
     return existing;
+  }
+
+  hasFreeSlot(size = { w: 3.4, h: 2.2 }) {
+    return SLOTS.some((slot) => !this._overlaps(slot, size));
+  }
+
+  _overlaps([x, y], size) {
+    return this.visible().some(
+      (p) =>
+        Math.abs(p.home.x - x) < (p.size.w + size.w) / 2 + 0.2 &&
+        Math.abs(p.home.y - y) < (p.size.h + size.h) / 2 + 0.2,
+    );
   }
 
   // A resting place that doesn't overlap the panels already showing: the top row first, then
@@ -103,6 +124,7 @@ export class PanelManager {
 
   focus(panel) {
     if (!panel) return;
+    panel.touchedAt = performance.now();
     for (const p of this.visible()) {
       if (p !== panel && p.state === "focused") this.setState(p, "normal");
     }

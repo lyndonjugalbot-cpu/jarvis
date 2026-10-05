@@ -218,3 +218,46 @@ async def test_confirm_is_resolved_once():
     assert bridge.resolve(action_id, True) is True
     assert bridge.resolve(action_id, False) is False  # a second HUD answering late changes nothing
     assert await waiting is True
+
+
+async def test_panel_types_are_checked():
+    from tools.hud import make_hud_tools
+    from tools.registry import ToolRegistry
+
+    class Bridge:
+        connected = True
+
+        def __init__(self):
+            self.sent = []
+
+        async def broadcast(self, kind, payload):
+            self.sent.append(payload["panel"])
+
+    bridge = Bridge()
+    reg = ToolRegistry(make_hud_tools(bridge))
+    chart = {"labels": ["Mon", "Tue"], "values": ["3", 4.5], "unit": "km"}
+    assert not (
+        await reg.run("show_panel", {"title": "Runs", "type": "chart", "data": chart})
+    ).is_error
+    assert bridge.sent[-1]["data"] == {
+        "labels": ["Mon", "Tue"],
+        "values": [3.0, 4.5],
+        "kind": "bar",
+        "unit": "km",
+    }
+    events = [{"title": "Standup", "start": "Tue 09:00"}]
+    assert not (
+        await reg.run("show_panel", {"title": "Tomorrow", "type": "calendar", "data": events})
+    ).is_error
+    image = {"url": "https://example.com/cat.jpg", "caption": "Miso"}
+    assert not (
+        await reg.run("show_panel", {"title": "Cat", "type": "image", "data": image})
+    ).is_error
+    for bad in (
+        {"type": "chart", "data": {"labels": ["a"], "values": [1, 2]}},
+        {"type": "chart", "data": {"labels": ["a"], "values": ["x"]}},
+        {"type": "calendar", "data": ["not an event"]},
+        {"type": "image", "data": {"url": "file:///etc/passwd"}},
+    ):
+        result = await reg.run("show_panel", {"title": "x", **bad})
+        assert result.is_error, bad

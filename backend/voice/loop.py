@@ -12,6 +12,7 @@ The loop is driven chunk by chunk (`feed`), so it runs the same on a real microp
 import asyncio
 import logging
 import re
+import time
 from collections.abc import Awaitable, Callable
 
 import numpy as np
@@ -143,14 +144,23 @@ class VoiceLoop:
     # ------------------------------------------------------------ a request
     async def _handle(self, audio: np.ndarray) -> None:
         self._turn_active = True
+        started = time.monotonic()
         try:
             text = await self._transcriber.transcribe(audio)
+            transcribed = time.monotonic()
             if text.strip().lower() in _NOISE:
                 self.mode = self.IDLE
                 await self._on_state("idle")
                 return
             log.info("heard: %s", text)
             reply = await self._answer(text)
+            answered = time.monotonic()
+            log.info(
+                "voice timing: transcribe %.2fs, answer %.2fs (after %.1fs of speech)",
+                transcribed - started,
+                answered - transcribed,
+                len(audio) / 16000,
+            )
             if reply:
                 await self._say(reply)
             elif self.mode == self.BUSY:

@@ -79,6 +79,81 @@ body {
   color: var(--cyan);
 }
 
+.agenda {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agenda li {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 2px 10px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(34, 211, 238, 0.15);
+}
+
+.agenda time {
+  color: var(--cyan);
+  font-variant-numeric: tabular-nums;
+}
+
+.agenda small {
+  grid-column: 2;
+  color: var(--muted);
+}
+
+.chart {
+  width: 100%;
+  height: auto;
+}
+
+.chart .bar {
+  fill: rgba(34, 211, 238, 0.55);
+}
+
+.chart .line {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 2;
+}
+
+.chart .axis {
+  stroke: rgba(34, 211, 238, 0.35);
+}
+
+.chart .tick {
+  fill: var(--muted);
+  font: 10px var(--font-body);
+}
+
+.panel-content figure {
+  margin: 0;
+}
+
+.panel-content img {
+  display: block;
+  max-width: 100%;
+  max-height: 150px;
+  margin: 0 auto;
+  border: 1px solid var(--line);
+}
+
+.panel-content figcaption {
+  margin-top: 6px;
+  color: var(--muted);
+  text-align: center;
+}
+
+[data-state="warn"] .dot {
+  background: var(--warning);
+  opacity: 1;
+}
+
+.drawer > h2 + .hud-settings {
+  margin-bottom: 16px;
+}
+
 /* Faint drifting grid and scanlines over the scene */
 .grid,
 .scanlines {

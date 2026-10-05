@@ -1,9 +1,12 @@
 // A floating holographic panel. The frame (tint, border, corner brackets) is a WebGL plane so it
 // glows with the bloom pass; the content is HTML in a CSS3DObject that follows the plane, so text
 // stays sharp. Object model (spec 5.3): id, type, title, data, state, position, size, createdAt.
+// Types: text, list, calendar, chart, image (see content.js).
 
 import * as THREE from "three";
 import { CSS3DObject } from "three/addons/renderers/CSS3DRenderer.js";
+
+import { renderBody } from "./content.js";
 
 const FRAME_PX_PER_UNIT = 150;
 const CSS_PX_PER_UNIT = 110; // content size in CSS pixels; about 1:1 with the screen at rest
@@ -28,6 +31,7 @@ export class Panel {
     this.dimmed = false;
     this.expand = 1;
     this.openedAt = performance.now();
+    this.touchedAt = this.openedAt;
 
     this.canvas = document.createElement("canvas");
     this.canvas.width = Math.round(this.size.w * FRAME_PX_PER_UNIT);
@@ -63,19 +67,7 @@ export class Panel {
     this.type = type;
     const heading = document.createElement("h3");
     heading.textContent = title;
-    let body;
-    if (this.type === "list") {
-      body = document.createElement("ul");
-      for (const item of Array.isArray(data) ? data : [data]) {
-        const li = document.createElement("li");
-        li.textContent = String(item);
-        body.append(li);
-      }
-    } else {
-      body = document.createElement("p");
-      body.textContent = typeof data === "string" ? data : JSON.stringify(data);
-    }
-    this.element.replaceChildren(heading, body);
+    this.element.replaceChildren(heading, renderBody(this.type, data));
   }
 
   spec() {

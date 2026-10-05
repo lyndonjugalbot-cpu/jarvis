@@ -59,6 +59,16 @@ prompt when the request is settled.
 
 ## Panel types
 
-The `show_panel` tool currently supports two types: `text` (a string; line breaks are kept)
-and `list` (an array of short strings). Calendar, chart, image and web panels come in later
-phases.
+`show_panel` checks each type's data before sending it:
+
+| type | data |
+| --- | --- |
+| `text` | a string; line breaks are kept |
+| `list` | an array of short strings |
+| `calendar` | `[{ "title", "start", "end", "location" }]`, shown as an agenda |
+| `chart` | `{ "labels": [...], "values": [numbers], "kind": "bar" \| "line", "unit": "" }`, drawn as SVG |
+| `image` | `{ "url": "https://...", "caption": "" }`; only http(s) URLs, loaded without a referrer |
+
+Panel content is built with DOM text nodes, never `innerHTML`, because data can come from web
+pages and emails. When all five places on the HUD are full, the least recently viewed panel
+moves to the dock.

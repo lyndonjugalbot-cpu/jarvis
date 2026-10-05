@@ -3,6 +3,7 @@
 python main.py serve          # core for the HUD: WebSocket /ws on 127.0.0.1
 python main.py chat           # terminal chat
 python main.py google-login   # connect Calendar and Gmail (docs/google-setup.md)
+python main.py clear-logs     # delete the log files
 """
 
 import argparse
@@ -10,7 +11,9 @@ import asyncio
 import hmac
 import json
 import logging
+import os
 import secrets
+import sys
 from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 
@@ -207,7 +210,10 @@ def create_app(
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="jarvis", description="JARVIS core")
     parser.add_argument(
-        "command", nargs="?", default="serve", choices=["serve", "chat", "google-login"]
+        "command",
+        nargs="?",
+        default="serve",
+        choices=["serve", "chat", "google-login", "clear-logs"],
     )
     args = parser.parse_args(argv)
     settings = load_settings()
@@ -224,6 +230,13 @@ def main(argv: list[str] | None = None) -> None:
         print(f"Connected. The sign-in is saved in {google.token_file}.")
         return
 
+    if args.command == "clear-logs":
+        removed = [p for p in settings.log_dir.glob("jarvis.log*") if p.is_file()]
+        for path in removed:
+            path.unlink()
+        print(f"Removed {len(removed)} log file(s) from {settings.log_dir}.")
+        return
+
     if args.command == "chat":
         setup_logging(settings, console=False)  # details go to ~/.jarvis/logs, the chat stays clean
         from terminal import run_chat
@@ -232,10 +245,19 @@ def main(argv: list[str] | None = None) -> None:
             asyncio.run(run_chat(settings))
         except KeyboardInterrupt:
             print()
-        return
+        _exit_now()
 
     setup_logging(settings, console=True)
     uvicorn.run(create_app(settings), host=settings.host, port=settings.port, log_config=None)
+    _exit_now()
+
+
+def _exit_now() -> None:
+    """Everything is closed by now. Skip interpreter teardown: the native speech and ONNX
+    libraries can abort in their exit-time destructors, which macOS reports as a crash."""
+    logging.shutdown()
+    sys.stdout.flush()
+    os._exit(0)
 
 
 if __name__ == "__main__":

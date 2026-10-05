@@ -6,19 +6,41 @@ A personal AI assistant you talk to and control with hand gestures. The full des
 JARVIS answers through the Claude and ChatGPT subscriptions you already pay for. Free services
 come next, and a pay-per-use API is only the last resort, with a monthly cap.
 
+## Quick start
+
+```sh
+scripts/setup.sh    # once: packages, token, sign-in checks
+scripts/start.sh    # starts JARVIS and opens the HUD at http://127.0.0.1:8765
+```
+
+Then say **"Hey Jarvis"**, press **/** to type, or press **C** to control it with your hands.
+
 ## Status
 
-| Phase | State |
+All eight phases of the spec's roadmap are built:
+
+| Phase | What's there |
 | --- | --- |
-| 0. Setup | Done: core and HUD each start with one command |
-| 1. Brain | Done: terminal chat on the Claude plan, tool registry, MCP tool server, time, web search, notes |
-| 2. HUD + gestures | Done: Three.js panels with bloom, webcam hand tracking, gestures with the 7.1 rules, demo, recorder |
-| 3. Connect | Done: WebSocket link (Origin check, first-message token), typing in the HUD, panels from the core, approve/cancel prompt, orb states, provider badge |
-| 4. Real tools | Done: weather, files, system, Calendar and Gmail (after the one-time [Google setup](docs/google-setup.md)), reconnect flow |
-| 5. Fallback chain | Done: ChatGPT plan (Codex), local Ollama model, capped paid Claude API, failover |
-| 6. Memory | Done: facts, conversation history across restarts, local embeddings for recall, background summaries, remember/recall/forget |
-| 7. Voice | Done: "Hey Jarvis" wake word, local speech-to-text and voice, barge-in, spoken yes/no for approvals |
-| 8. Polish | Next |
+| 0. Setup | One-command start, setup script, shared token |
+| 1. Brain | Claude plan through `claude -p`, tool registry, MCP tool server |
+| 2. HUD and gestures | Three.js panels with bloom, MediaPipe hand tracking, gestures with the look-alike rules |
+| 3. Connect | WebSocket link (Origin check, first-message token), panels from the core, approve/cancel prompt |
+| 4. Real tools | Weather, files, system, Calendar and Gmail (after the [Google setup](docs/google-setup.md)) |
+| 5. Fallback chain | ChatGPT plan, local Ollama model, paid Claude API with a monthly cap |
+| 6. Memory | Facts, history across restarts, local-embedding recall, summaries, forget |
+| 7. Voice | "Hey Jarvis", local speech-to-text and voice, barge-in, spoken approvals |
+| 8. Polish | Calendar, chart and image panels, interface sounds, HUD settings, an uncluttered HUD |
+
+### Measured against the spec's targets (section 10)
+
+| Area | Target | Measured on this MacBook Air |
+| --- | --- | --- |
+| Gesture latency | under 100 ms | Engine: 2 µs per frame. The cursor follows each camera frame (33 ms at 30 fps, plus MediaPipe). Gestures wait 4 frames on purpose, to avoid accidental triggers. Not yet checked with a real camera. |
+| Tracking frame rate | at least 25 fps | Shown live in the Gestures indicator, amber below 20 fps |
+| Voice response | under 3 s for simple requests | About 2.5 s from the end of speech to the start of the reply (warm Claude CLI) |
+| Wake word | under 1 false trigger per hour | Not measured yet; tune `wake_threshold` |
+| Resource use | core idle under 500 MB; HUD 60 fps with 6 panels | HUD 60 fps with 6 panels. Core 340 MB without voice, about 770 MB with the voice models loaded (Whisper is about 260 MB). The Claude CLI is a separate process, about 290 MB. |
+| Reliability | auto-reconnect; failures give a friendly spoken error | The HUD reconnects with backoff. Provider and tool failures come back as plain-language replies, spoken during voice requests. |
 
 ## Requirements
 
@@ -40,10 +62,12 @@ This installs the Python packages into `~/.jarvis/venv` and the HUD packages int
 ## Run
 
 ```sh
+scripts/start.sh        # everything: the core serves the HUD and opens it in your browser
 scripts/start.sh chat   # talk to JARVIS in the terminal
-scripts/start.sh core   # core server for the HUD (http://127.0.0.1:8765/api/health)
-scripts/start.sh hud    # HUD on http://127.0.0.1:5173
+scripts/start.sh core   # core server only (http://127.0.0.1:8765), for HUD development
+scripts/start.sh hud    # HUD dev server with live reload on http://127.0.0.1:5173
 scripts/start.sh google # connect Calendar and Gmail (after docs/google-setup.md)
+scripts/start.sh clear-logs  # delete the logs in ~/.jarvis/logs
 scripts/start.sh test   # backend and gesture tests
 ```
 
@@ -140,12 +164,12 @@ to answer). Requests that use tools take longer.
 
 ## The HUD
 
-Start the core and the HUD in two terminals, then open http://127.0.0.1:5173:
+`scripts/start.sh` opens it at http://127.0.0.1:8765. For HUD development, run `scripts/start.sh core` and
+`scripts/start.sh hud` and open http://127.0.0.1:5173 instead.
 
-```sh
-scripts/start.sh core
-scripts/start.sh hud
-```
+- **Panels:** text, lists, calendar agendas, bar and line charts, and images. When the five
+  places are full, the panel you looked at least recently moves to the dock.
+- **Settings (S):** interface sounds, the welcome panels, and every gesture threshold.
 
 - Press **/** to type to JARVIS. Answers worth reading open as panels.
 - When JARVIS wants to do something risky, like saving a note, a prompt asks first. Approve with

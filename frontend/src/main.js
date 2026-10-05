@@ -12,6 +12,7 @@ import { createDebug } from "./hud/debug.js";
 import { PanelManager } from "./hud/panels.js";
 import { createScene } from "./hud/scene.js";
 import { createSettingsDrawer, loadSettings } from "./hud/settings-drawer.js";
+import { createSounds } from "./hud/sounds.js";
 import { setIndicator, startClock } from "./hud/statusbar.js";
 import { createTranscript } from "./hud/transcript.js";
 import { createSocket } from "./net/socket.js";
@@ -47,12 +48,43 @@ const STARTER_PANELS = [
   },
 ];
 
+// ---------------------------------------------------------------- HUD preferences
+const PREFS_KEY = "jarvis.hud";
+function loadPrefs() {
+  try {
+    return { sounds: true, welcome: true, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}") };
+  } catch {
+    return { sounds: true, welcome: true };
+  }
+}
+function savePrefs() {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    // storage blocked: preferences last until reload
+  }
+}
+const prefs = loadPrefs();
+const sounds = createSounds({ enabled: prefs.sounds });
+
 // ---------------------------------------------------------------- HUD
 const settings = loadSettings();
 const view = createScene($("scene"), $("css-layer"));
 const panels = new PanelManager(view, $("dock"));
-for (const spec of STARTER_PANELS) panels.add(spec);
-panels.focus(panels.panels[0]);
+if (prefs.welcome) {
+  for (const spec of STARTER_PANELS) panels.add(spec);
+  panels.focus(panels.panels[0]);
+  prefs.welcome = false; // a clean HUD from the next start; turn them back on in settings (S)
+  savePrefs();
+}
+for (const box of document.querySelectorAll(".hud-settings input")) {
+  box.checked = Boolean(prefs[box.name]);
+  box.addEventListener("change", () => {
+    prefs[box.name] = box.checked;
+    if (box.name === "sounds") sounds.enabled = box.checked;
+    savePrefs();
+  });
+}
 
 // ---------------------------------------------------------------- link to the core
 const token = import.meta.env.VITE_JARVIS_TOKEN ?? "";
@@ -124,13 +156,21 @@ socket.on("provider", ({ label, paid, coolingDown, order, budget }) => {
     ? `Cooling down: ${coolingDown.join(", ")}`
     : "";
 });
-socket.on("show_panel", ({ panel }) => panels.show(panel));
+socket.on("show_panel", ({ panel }) => {
+  if (!panels.find(panel.id)) sounds.play("open");
+  panels.show(panel);
+});
 socket.on("update_panel", ({ panelId, data }) => {
   const panel = panels.find(panelId);
   if (panel) panels.show({ id: panelId, data });
 });
-socket.on("close_panel", ({ panelId }) => panels.close(panels.find(panelId)));
+socket.on("close_panel", ({ panelId }) => {
+  const panel = panels.find(panelId);
+  if (panel) sounds.play("close");
+  panels.close(panel);
+});
 socket.on("confirm_request", (request) => {
+  sounds.play("alert");
   confirmPrompt.show(request);
   say("Approve with a thumbs up (or Y), cancel with a thumbs down (or N).");
 });
@@ -158,12 +198,24 @@ socket.on("auth_done", ({ ok, message }) => {
 // ---------------------------------------------------------------- gestures
 const cursor = createCursor($("cursor"));
 const engine = createGestureEngine(settings);
+function showGestureState() {
+  if (!tracker) return;
+  const rate = Math.round(fps);
+  const text = `${engine.armed ? "armed" : "disarmed"} | ${rate} fps`;
+  const low = rate > 0 && rate < 20;
+  setIndicator("gestures", low ? "warn" : engine.armed ? "armed" : "idle", text);
+  document.querySelector('[data-indicator="gestures"]').title = low
+    ? "Low frame rate: try more light on your hands, or close other heavy apps."
+    : "";
+}
+setInterval(showGestureState, 1000);
+
 const controller = createController({
   panels,
   cursor,
   settings,
   say,
-  setIndicator,
+  setIndicator: (name, state, text) => (name === "gestures" && tracker ? showGestureState() : setIndicator(name, state, text)),
   onConfirm: (approved) => confirmPrompt.answer(approved),
 });
 const debug = createDebug($("debug"), $("camera"));
@@ -177,9 +229,15 @@ let replaying = null;
 let recording = null;
 let mouseDrag = null;
 
+const GESTURE_SOUNDS = { armed: "armed", drag_start: "grab", maximize: "open", restore: "open", minimize: "close" };
+
 function feed(frame, from) {
   const events = engine.update(frame);
   controller.handle(events);
+  for (const e of events) {
+    if (GESTURE_SOUNDS[e.type]) sounds.play(GESTURE_SOUNDS[e.type]);
+    if (e.type === "swipe" && e.direction === "down") sounds.play("close");
+  }
   debug.show(frame, engine.hands, events, { fps, armed: engine.armed, source: from });
   for (const e of events) {
     if (!REPORTED_GESTURES.has(e.type)) continue;
